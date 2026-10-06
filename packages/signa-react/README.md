@@ -167,7 +167,7 @@ For production, prefer pinning the CDN URL to an exact package version:
 
 ```tsx
 <SignaForm
-  scriptUrl="https://cdn.jsdelivr.net/npm/@signajs/react@0.1.4/dist/form.js"
+  scriptUrl="https://cdn.jsdelivr.net/npm/@signajs/react@0.2.0/dist/form.js"
   src="https://signa.company.com/s/abc123"
 />
 ```
@@ -175,8 +175,8 @@ For production, prefer pinning the CDN URL to an exact package version:
 The same files are also available from unpkg after publish:
 
 ```text
-https://unpkg.com/@signajs/react@0.1.4/dist/form.js
-https://unpkg.com/@signajs/react@0.1.4/dist/builder.js
+https://unpkg.com/@signajs/react@0.2.0/dist/form.js
+https://unpkg.com/@signajs/react@0.2.0/dist/builder.js
 ```
 
 For self-hosted deployments, pass your Signa frontend origin through `host`.
