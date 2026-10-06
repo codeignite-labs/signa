@@ -132,6 +132,8 @@ export type SignaFormProps = {
   applicationKey?: string;
   externalId?: string;
   backgroundColor?: string;
+  theme?: "light" | "dark" | "system";
+  primaryColor?: string;
   logo?: string;
   language?: string;
   completedMessage?: {
@@ -178,7 +180,7 @@ const SignaForm = ({
   src = "",
   token = "",
   host = "",
-  scriptUrl = DEFAULT_FORM_SCRIPT_URL,
+  scriptUrl = "",
   role = "",
   submitter = "",
   preview = false,
@@ -189,6 +191,8 @@ const SignaForm = ({
   email = "",
   name = "",
   backgroundColor = "",
+  theme,
+  primaryColor,
   sendCopyEmail,
   applicationKey = "",
   externalId = "",
@@ -336,6 +340,8 @@ const SignaForm = ({
         "data-completed-button-title": completedButton.title,
         "data-completed-button-url": completedButton.url,
         "data-background-color": backgroundColor,
+        "data-theme": theme,
+        "data-primary-color": primaryColor,
         "data-custom-css": customCss,
         ref: formRef,
         className,

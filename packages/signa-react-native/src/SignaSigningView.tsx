@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
+  useColorScheme,
   View,
   type StyleProp,
   type ViewStyle,
@@ -35,6 +36,9 @@ export type SignaSigningViewProps = {
   name?: string;
   role?: string;
   externalId?: string;
+  theme?: "light" | "dark" | "system";
+  primaryColor?: string;
+  loadingLabel?: string;
   style?: StyleProp<ViewStyle>;
   webViewStyle?: StyleProp<ViewStyle>;
   showsLoadingIndicator?: boolean;
@@ -56,19 +60,51 @@ export function SignaSigningView(
   const signingUrl = useSignaSigningUrl(props);
   const handleMessage = useSignaMessageHandler(props);
   const webViewProps = getWebViewDefaults(props);
+  const webView = React.useRef<WebView<object>>(null);
+  const systemTheme = useColorScheme();
+  const theme = props.theme === "system" ? systemTheme === "dark" ? "dark" : "light" : props.theme;
+  const appearance = { theme, primaryColor: props.primaryColor };
+  const appearanceRef = React.useRef(appearance);
+  appearanceRef.current = appearance;
+  // Appearance changes use the bridge, preserving the document and unsaved fields.
+  const source = React.useMemo(() => ({ uri: buildSignaSigningUrl({ src: signingUrl, ...appearanceRef.current }) }), [signingUrl]);
+  const updateAppearance = React.useCallback(() => {
+    webView.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('signa:appearance',{detail:${JSON.stringify(appearanceRef.current)}}));true;`);
+  }, []);
+  React.useEffect(updateAppearance, [theme, props.primaryColor, updateAppearance]);
+  const backgroundColor = theme === "dark" ? "#101114" : "#ffffff";
+  const foregroundColor = theme === "dark" ? "#ffffff" : "#171717";
 
   return (
-    <View style={[styles.container, props.style]}>
-      <WebView
+    <View style={[styles.container, { backgroundColor }, props.style]}>
+      <WebView<object>
+        ref={webView}
+        cacheEnabled
         allowsInlineMediaPlayback={webViewProps.allowsInlineMediaPlayback}
         domStorageEnabled={webViewProps.domStorageEnabled}
         javaScriptEnabled={webViewProps.javaScriptEnabled}
         mixedContentMode={webViewProps.mixedContentMode}
-        onMessage={handleMessage}
+        onMessage={(event) => {
+          try {
+            if (JSON.parse(event.nativeEvent.data)?.type === "signa:appearance-ready") {
+              updateAppearance();
+              return;
+            }
+          } catch { /* The normal dispatcher ignores malformed messages. */ }
+          handleMessage(event);
+        }}
         originWhitelist={webViewProps.originWhitelist}
-        renderLoading={renderLoadingIndicator}
+        onLoadEnd={updateAppearance}
+        onError={(event) => props.onError?.({ code: "webview_load_failed", message: event.nativeEvent.description })}
+        onHttpError={(event) => props.onError?.({ code: "webview_http_error", message: `Signing page returned HTTP ${event.nativeEvent.statusCode}` })}
+        renderLoading={() => (
+          <View style={[styles.loadingState, { backgroundColor }]}>
+            <ActivityIndicator color={foregroundColor} />
+            <Text style={[styles.loadingText, { color: foregroundColor }]}>{props.loadingLabel ?? "Loading document…"}</Text>
+          </View>
+        )}
         sharedCookiesEnabled
-        source={{ uri: signingUrl }}
+        source={source}
         startInLoadingState={webViewProps.showsLoadingIndicator}
         style={[styles.webView, props.webViewStyle]}
       />
@@ -155,15 +191,6 @@ function getWebViewDefaults(props: SignaSigningViewProps) {
     originWhitelist: props.originWhitelist ?? ["https://*", "http://*"],
     showsLoadingIndicator: props.showsLoadingIndicator ?? true,
   };
-}
-
-function renderLoadingIndicator(): React.ReactElement {
-  return (
-    <View style={styles.loadingState}>
-      <ActivityIndicator />
-      <Text style={styles.loadingText}>Loading Signa...</Text>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

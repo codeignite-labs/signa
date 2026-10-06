@@ -154,3 +154,31 @@ pnpm changeset
 pnpm version:packages
 pnpm release:packages
 ```
+
+## Organization branding and host themes
+
+The hosted signing page loads the document owner's saved logo, business title and
+primary color automatically. The embedding app does not need to copy that data.
+
+Set `theme="light"`, `theme="dark"`, or `theme="system"` to control appearance.
+An optional `primaryColor="#7c3aed"` overrides the accent for this view only; Signa
+still derives readable text/control colors. It does not update the organization's
+saved branding or change the logo/title. Omit the props to use organization defaults.
+Live theme changes use the appearance bridge and preserve unsaved fields.
+
+```tsx
+<SignaSigningView
+  src="https://signa.example.com/s/submitter-slug"
+  theme={colorScheme === "dark" ? "dark" : "light"}
+  primaryColor="#7c3aed"
+  loadingLabel="Loading your document…"
+  onError={(error) => reportSigningError(error)}
+/>
+```
+
+The native loader follows the requested mode. `theme="system"` follows the native
+system appearance. WebView HTTP/load failures now reach `onError`. Keep the view
+mounted while editing; a changed signing URL intentionally starts a new document.
+Use HTTPS for production. Benchmark on physical Android/iOS devices with a release
+build and the production Signa URL; a desktop mobile viewport cannot reproduce
+WebView startup, keyboard behavior or device performance.

@@ -17,28 +17,41 @@
     }
 
     static get observedAttributes() {
-      return ["data-host", "data-src", "data-token"];
+      return ["data-host", "data-src", "data-token", "data-theme", "data-primary-color"];
     }
 
-    attributeChangedCallback() {
-      if (this.isConnected) {
+    attributeChangedCallback(name) {
+      if (!this.isConnected) return;
+      if (name === "data-theme" || name === "data-primary-color") {
+        this.sendAppearance();
+      } else {
         this.render();
       }
     }
 
+    sendAppearance() {
+      if (!this.iframe?.src) return;
+      this.iframe.contentWindow?.postMessage({
+        source: "signa:host", type: "appearance",
+        appearance: { theme: this.dataset.theme, primaryColor: this.dataset.primaryColor },
+      }, new URL(this.iframe.src).origin);
+    }
+
     handleMessage(event) {
-      if (event.source !== this.iframe?.contentWindow) {
+      if (!this.iframe?.src || event.source !== this.iframe.contentWindow || event.origin !== new URL(this.iframe.src).origin) {
         return;
       }
 
       const data = event.data || {};
+      if (data.source === "signa" && (data.type === "load" || data.type === "appearance-ready")) this.sendAppearance();
 
       if (data.source !== "signa") {
         return;
       }
 
-      if (data.type === "resize" && data.height) {
-        this.iframe.style.height = `${Math.max(Number(data.height), 320)}px`;
+      if (data.type === "resize") {
+        const height = Number(data.height);
+        if (Number.isFinite(height) && height > 0) this.iframe.style.height = `${Math.max(height, 320)}px`;
         return;
       }
 
@@ -77,12 +90,14 @@
         this.appendChild(this.iframe);
       }
 
-      this.iframe.src = this.buildFrameUrl(src);
+      const nextUrl = this.buildFrameUrl(src);
+      if (this.iframe.src !== nextUrl) this.iframe.src = nextUrl;
     }
 
     buildFrameUrl(src) {
       const url = new URL(src, this.getFrameBaseUrl());
 
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error("Signing URL must use HTTP or HTTPS");
       url.searchParams.set("embed", "true");
 
       for (const [key, value] of Object.entries(this.dataset)) {

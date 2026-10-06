@@ -30,7 +30,8 @@
   "scripts": {
     "build": "node esbuild.config.cjs && tsc --emitDeclarationOnly --outDir dist",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
   },
   "peerDependencies": {
     "react": ">=18.2.0 <20",
