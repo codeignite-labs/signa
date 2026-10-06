@@ -119,7 +119,9 @@ export class AccountsController {
   }
 
   @Post('logo')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     description:
@@ -160,7 +162,9 @@ export class AccountsController {
   }
 
   @Post('signing-certificates')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 1024 * 1024 } }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     description:
@@ -182,10 +186,10 @@ export class AccountsController {
     );
   }
 
-  @Patch('signing-certificates/default')
+  @Patch(['signing-certificates/default', 'signing-certificates/active'])
   @ApiOperation({
     description:
-      'Marks an uploaded signing certificate as the account default certificate for completed PDF signing.',
+      'Activates one named signing identity for future PDFs. Validates its private key, usage, dates, and chain.',
     summary: 'Set default signing certificate',
   })
   @ApiOkResponse({ type: SigningCertificateResponseDto })
@@ -199,7 +203,7 @@ export class AccountsController {
   @Delete('signing-certificates')
   @ApiOperation({
     description:
-      'Deletes an uploaded signing certificate by name and updates default certificate selection if needed.',
+      'Deletes an inactive signing certificate. The active identity cannot be deleted.',
     summary: 'Delete signing certificate',
   })
   @ApiOkResponse({ type: SigningCertificateResponseDto })
@@ -278,7 +282,7 @@ export class AccountsController {
   @Get('integrations')
   @ApiOperation({
     description:
-      'Lists connected account email integrations such as Gmail and Microsoft.',
+      'Lists connected account email integrations such as Gmail.',
     summary: 'List email integrations',
   })
   @ApiOkResponse({ type: AccountEmailIntegrationListResponseDto })
@@ -290,7 +294,7 @@ export class AccountsController {
 
   @Post('integrations/:provider/connect')
   @ApiParam({
-    description: 'Email provider key, for example gmail or microsoft.',
+    description: 'Email provider key, for example gmail.',
     name: 'provider',
   })
   @ApiOperation({
@@ -311,7 +315,7 @@ export class AccountsController {
 
   @Post('integrations/:provider/callback')
   @ApiParam({
-    description: 'Email provider key, for example gmail or microsoft.',
+    description: 'Email provider key, for example gmail.',
     name: 'provider',
   })
   @ApiOperation({
@@ -334,7 +338,7 @@ export class AccountsController {
 
   @Delete('integrations/:provider')
   @ApiParam({
-    description: 'Email provider key, for example gmail or microsoft.',
+    description: 'Email provider key, for example gmail.',
     name: 'provider',
   })
   @ApiOperation({

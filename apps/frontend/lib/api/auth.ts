@@ -1,3 +1,4 @@
+import { clearBrandingCache } from "@/lib/branding/branding-cache";
 import { ApiError, apiFetch } from "./http";
 import type { SignaRole } from "@repo/shared";
 import { normalizeLocale, persistLocale } from "@/lib/i18n/config";
@@ -7,6 +8,8 @@ const authStorageEvent = "signa.auth.changed";
 const tokenExpirySkewSeconds = 15;
 
 export type AuthUser = {
+  membership_status?: string;
+  shared_identity?: boolean;
   id: string;
   first_name: string | null;
   last_name: string | null;
@@ -164,6 +167,8 @@ export type MfaStatus = {
 };
 
 export type SigningCertificate = {
+  is_active: boolean;
+  fingerprint_sha256: string | null;
   issuer: string | null;
   name: string;
   filename?: string;
@@ -196,9 +201,9 @@ export type SigningTrustRootList = {
   data: SigningTrustRoot[];
 };
 
-export type AccountEmailIntegrationProvider = "gmail" | "microsoft";
+export type AccountEmailIntegrationProvider = "gmail";
 
-export type SocialAuthProvider = "google" | "microsoft";
+export type SocialAuthProvider = "google";
 
 export type SocialAuthStartResponse = {
   state: string;
@@ -380,6 +385,7 @@ export function clearAuthSession(): void {
   }
 
   window.localStorage.removeItem(authStorageKey);
+  clearBrandingCache();
   window.dispatchEvent(new Event(authStorageEvent));
 }
 
@@ -580,7 +586,7 @@ export function makeDefaultSigningCertificate(
   name: string,
 ): Promise<SigningCertificate> {
   return authenticatedApiFetch<SigningCertificate>(
-    "/account/signing-certificates/default",
+    "/account/signing-certificates/active",
     {
       body: JSON.stringify({ name }),
       method: "PATCH",
@@ -853,6 +859,7 @@ function mergeAuthUserSession(user: AuthUser): void {
     user: {
       ...session.user,
       ...user,
+      role: session.user.role,
     },
   });
 }

@@ -138,15 +138,9 @@ const validationSchema = Joi.object({
   GOOGLE_AUTH_CLIENT_ID: Joi.string().allow('').optional(),
   GOOGLE_AUTH_CLIENT_SECRET: Joi.string().allow('').optional(),
   GOOGLE_AUTH_REDIRECT_URI: Joi.string().uri().allow('').optional(),
-  MICROSOFT_AUTH_CLIENT_ID: Joi.string().allow('').optional(),
-  MICROSOFT_AUTH_CLIENT_SECRET: Joi.string().allow('').optional(),
-  MICROSOFT_AUTH_REDIRECT_URI: Joi.string().uri().allow('').optional(),
   GMAIL_OAUTH_CLIENT_ID: Joi.string().allow('').optional(),
   GMAIL_OAUTH_CLIENT_SECRET: Joi.string().allow('').optional(),
   GMAIL_OAUTH_REDIRECT_URI: Joi.string().uri().allow('').optional(),
-  MICROSOFT_OAUTH_CLIENT_ID: Joi.string().allow('').optional(),
-  MICROSOFT_OAUTH_CLIENT_SECRET: Joi.string().allow('').optional(),
-  MICROSOFT_OAUTH_REDIRECT_URI: Joi.string().uri().allow('').optional(),
 
   WEBHOOK_TIMEOUT_MS: Joi.number().integer().min(1000).default(10_000),
   WEBHOOK_MAX_ATTEMPTS: Joi.number().integer().min(1).default(8),
@@ -178,15 +172,42 @@ const validationSchema = Joi.object({
     .default(10 * 1024 * 1024),
   PDF_PREVIEW_MAX_PAGES: Joi.number().integer().min(1).default(15),
   PDF_PREVIEW_MAX_WIDTH: Joi.number().integer().min(300).default(1400),
+  SIGNING_KEY_ENCRYPTION_KEY: Joi.string()
+    .pattern(/^[a-fA-F0-9]{64}$/)
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }),
+  PDF_TSA_TRUST_CERTIFICATES: Joi.string().allow('').default(''),
+  PDF_REQUIRE_TRUSTED_SIGNER: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.boolean().default(true),
+      otherwise: Joi.boolean().default(false),
+    }),
   PDF_SIGNATURE_SUBFILTER: Joi.string()
     .valid('pades', 'adobe')
     .default('pades'),
   PDF_TIMESTAMP_REQUIRED: Joi.boolean()
     .truthy('true')
     .falsy('false')
-    .default(false),
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.boolean().default(true),
+      otherwise: Joi.boolean().default(false),
+    }),
   PDF_TIMESTAMP_TIMEOUT_MS: Joi.number().integer().min(1000).default(10_000),
-  PDF_LTV_REQUIRED: Joi.boolean().truthy('true').falsy('false').default(false),
+  PDF_LTV_REQUIRED: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.boolean().default(true),
+      otherwise: Joi.boolean().default(false),
+    }),
   PDF_LTV_HTTP_TIMEOUT_MS: Joi.number().integer().min(1000).default(10_000),
   PDF_A_ENABLED: Joi.boolean().truthy('true').falsy('false').default(false),
   PDF_A_REQUIRED: Joi.boolean().truthy('true').falsy('false').default(false),

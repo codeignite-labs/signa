@@ -41,6 +41,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UserConfig } from './entities/user-config.entity';
 import { User } from './entities/user.entity';
+import { AccountMembershipsService } from '../account-memberships/account-memberships.service';
 
 type ProfileAssetKey = 'signature' | 'initials';
 
@@ -60,9 +61,11 @@ export class UsersService {
     private readonly emailVerificationCodes: EmailVerificationCodeService,
     private readonly mailService: MailService,
     private readonly storageService: StorageService,
+    private readonly memberships: AccountMembershipsService,
   ) {}
 
-  findActiveUser(userId: string): Promise<User | null> {
+  findActiveUser(userId: string, accountId?: string): Promise<User | null> {
+    if (accountId) return this.memberships.resolveUser(userId, accountId);
     return this.users.findOne({
       where: {
         id: userId,
@@ -103,7 +106,23 @@ export class UsersService {
       },
     });
 
-    return users.map((user) => this.toUserResponse(user));
+    const members = await this.memberships.listMembers(
+      options.accountId,
+      options.status === 'archived',
+    );
+    const memberIds = await this.memberships.membershipUserIds(
+      options.accountId,
+    );
+    return [
+      ...users
+        .filter((user) => !memberIds.has(String(user.id)))
+        .map((user) => this.toUserResponse(user)),
+      ...members.map(({ user, status }) => ({
+        ...this.toUserResponse(user),
+        membership_status: status,
+        shared_identity: true,
+      })),
+    ];
   }
 
   async createUser(
@@ -111,7 +130,30 @@ export class UsersService {
     input: CreateUserDto,
   ): Promise<UserResponseDto> {
     const email = input.email.toLowerCase();
-    const existingUser = await this.users.findOne({ where: { email } });
+    const existingUser = await this.users.findOne({
+      where: { email },
+      withDeleted: true,
+    });
+
+    if (
+      existingUser &&
+      (String(existingUser.accountId) !== String(accountId) ||
+        (await this.memberships.hasMembershipRecord(
+          accountId,
+          existingUser.id,
+        )))
+    ) {
+      const invited = await this.memberships.invite(
+        accountId,
+        existingUser,
+        this.normalizeRole(input.role),
+      );
+      return {
+        ...this.toUserResponse(invited),
+        membership_status: 'invited',
+        shared_identity: true,
+      };
+    }
 
     if (existingUser && !existingUser.archivedAt) {
       throw new ConflictException({ error: 'Email already exists' });
@@ -154,6 +196,29 @@ export class UsersService {
     currentUserId: string;
     input: UpdateUserDto;
   }): Promise<UserResponseDto> {
+    const identity = await this.users.findOneBy({ id: options.userId });
+    if (
+      identity &&
+      (String(identity.accountId) !== String(options.accountId) ||
+        (await this.memberships.hasMembershipRecord(
+          options.accountId,
+          identity.id,
+        )))
+    ) {
+      if (Object.entries(options.input).some(([key, value]) => key !== 'role' && value !== undefined))
+        throw new ForbiddenException(
+          'Only the account role can be changed for a shared login identity',
+        );
+      if (String(options.currentUserId) === String(options.userId))
+        throw new ForbiddenException('Unable to change your own role');
+      const member = await this.memberships.changeMember(
+        options.accountId,
+        options.userId,
+        { role: options.input.role },
+      );
+      if (!member) throw new ForbiddenException('Account membership not found');
+      return { ...this.toUserResponse(member), shared_identity: true };
+    }
     const user = await this.findAccountUserOrFail(
       options.accountId,
       options.userId,
@@ -391,9 +456,17 @@ export class UsersService {
     userId: string;
     currentUserId: string;
   }): Promise<UserResponseDto> {
-    if (options.userId === options.currentUserId) {
+    if (String(options.userId) === String(options.currentUserId)) {
       throw new ForbiddenException({ error: 'Unable to remove current user' });
     }
+
+    const member = await this.memberships.changeMember(
+      options.accountId,
+      options.userId,
+      { archive: true },
+    );
+    if (member)
+      return { ...this.toUserResponse(member), shared_identity: true };
 
     const user = await this.findAccountUserOrFail(
       options.accountId,

@@ -1,3 +1,4 @@
+import { AccountMembershipsService } from '../account-memberships/account-memberships.service';
 import {
   ConflictException,
   Injectable,
@@ -58,6 +59,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
+    private readonly memberships: AccountMembershipsService,
     @InjectRepository(AccessToken)
     private readonly accessTokens: Repository<AccessToken>,
     @InjectRepository(AccountLinkedAccount)
@@ -88,25 +90,47 @@ export class AuthService {
     if (
       !accessToken?.user ||
       accessToken.revokedAt ||
-      accessToken.user.archivedAt ||
-      accessToken.user.account.archivedAt
+      accessToken.user.archivedAt
     ) {
       return null;
     }
 
+    const user = await this.memberships.resolveUser(
+      accessToken.userId,
+      accessToken.accountId ?? accessToken.user.accountId,
+    );
+    if (!user) return null;
+    if (
+      accessToken.teamId &&
+      !(await this.dataSource.getRepository(Team).existsBy({
+        id: accessToken.teamId,
+        accountId: user.accountId,
+        archivedAt: IsNull(),
+      }))
+    )
+      return null;
+    if (
+      accessToken.teamId &&
+      user.role !== 'admin' &&
+      !(await this.dataSource.getRepository(TeamMember).existsBy({
+        teamId: accessToken.teamId,
+        accountId: user.accountId,
+        userId: user.id,
+        archivedAt: IsNull(),
+      }))
+    )
+      return null;
     await this.accessTokens.update(accessToken.id, { lastUsedAt: new Date() });
 
-    const testingLink = await this.resolveTestingLink(
-      accessToken.user.accountId,
-    );
+    const testingLink = await this.resolveTestingLink(user.accountId);
 
     return {
-      accountId: accessToken.user.accountId,
+      accountId: user.accountId,
       userId: accessToken.userId,
       accessTokenId: accessToken.id,
       isTestMode: testingLink.isTestMode,
       productionAccountId: testingLink.productionAccountId,
-      role: accessToken.user.role,
+      role: user.role,
       apiTokenPermissions: normalizeApiTokenPermissions(
         accessToken.permissions,
       ),
@@ -115,22 +139,29 @@ export class AuthService {
     };
   }
 
-  async getUserApiToken(userId: string): Promise<ApiTokenResponseDto> {
+  async getUserApiToken(
+    userId: string,
+    accountId?: string,
+  ): Promise<ApiTokenResponseDto> {
     return this.toApiTokenResponse(
-      await this.findOrCreateUserApiToken(userId),
-      await this.getUserRole(userId),
+      await this.findOrCreateUserApiToken(userId, accountId),
+      await this.getUserRole(userId, accountId),
     );
   }
 
   async revealUserApiToken(
     userId: string,
     password: string,
+    accountId?: string,
   ): Promise<ApiTokenRevealResponseDto> {
     await this.assertUserPassword(userId, password);
-    const accessToken = await this.findOrCreateUserApiToken(userId);
+    const accessToken = await this.findOrCreateUserApiToken(userId, accountId);
 
     return {
-      ...this.toApiTokenResponse(accessToken, await this.getUserRole(userId)),
+      ...this.toApiTokenResponse(
+        accessToken,
+        await this.getUserRole(userId, accountId),
+      ),
       revealed_token: this.decryptApiToken(accessToken.token),
     };
   }
@@ -138,9 +169,10 @@ export class AuthService {
   async rotateUserApiToken(
     userId: string,
     input: RotateApiTokenDto,
+    accountId?: string,
   ): Promise<ApiTokenRevealResponseDto> {
     await this.assertUserPassword(userId, input.password);
-    const accessToken = await this.findOrCreateUserApiToken(userId);
+    const accessToken = await this.findOrCreateUserApiToken(userId, accountId);
     const token = this.generateApiToken();
 
     accessToken.token = this.encryptApiToken(token);
@@ -154,7 +186,10 @@ export class AuthService {
     const saved = await this.accessTokens.save(accessToken);
 
     return {
-      ...this.toApiTokenResponse(saved, await this.getUserRole(userId)),
+      ...this.toApiTokenResponse(
+        saved,
+        await this.getUserRole(userId, accountId),
+      ),
       revealed_token: token,
     };
   }
@@ -162,14 +197,15 @@ export class AuthService {
   async updateUserApiTokenPermissions(
     userId: string,
     input: UpdateApiTokenPermissionsDto,
+    accountId?: string,
   ): Promise<ApiTokenResponseDto> {
-    const accessToken = await this.findOrCreateUserApiToken(userId);
+    const accessToken = await this.findOrCreateUserApiToken(userId, accountId);
 
     accessToken.permissions = normalizeApiTokenPermissions(input.permissions);
 
     return this.toApiTokenResponse(
       await this.accessTokens.save(accessToken),
-      await this.getUserRole(userId),
+      await this.getUserRole(userId, accountId),
     );
   }
 
@@ -183,6 +219,7 @@ export class AuthService {
         permissions: [...defaultApiTokenPermissions],
         sha256: this.hashApiToken(token),
         teamId: options.teamId,
+        accountId: options.user.accountId,
         token: this.encryptApiToken(token),
         userId: options.user.id,
       }),
@@ -309,7 +346,6 @@ export class AuthService {
     if (
       !user ||
       user.archivedAt ||
-      user.account.archivedAt ||
       !(await verifyPassword(input.password, user.encryptedPassword))
     ) {
       throw new UnauthorizedException({ error: 'Invalid email or password' });
@@ -337,7 +373,27 @@ export class AuthService {
       }
     }
 
+    return this.createLoginResponse(user);
+  }
+
+  async createLoginResponse(identity: User): Promise<AuthResponseDto> {
+    let user = await this.memberships.resolveUser(
+      identity.id,
+      identity.accountId,
+    );
+    if (!user) {
+      const account = (await this.memberships.listAccounts(identity.id)).find(
+        (item) => item.status === 'active',
+      );
+      if (account)
+        user = await this.memberships.resolveUser(identity.id, account.id);
+    }
+    if (!user) throw new UnauthorizedException('No active account membership');
     return this.createAuthResponse(user, user.account);
+  }
+
+  resolveSessionUser(payload: WebSessionJwtPayload): Promise<User | null> {
+    return this.memberships.resolveUser(payload.userId, payload.accountId);
   }
 
   async requestPasswordReset(input: ForgotPasswordDto): Promise<{ ok: true }> {
@@ -459,9 +515,25 @@ export class AuthService {
     };
   }
 
-  private async findOrCreateUserApiToken(userId: string): Promise<AccessToken> {
+  private async findOrCreateUserApiToken(
+    userId: string,
+    accountId?: string,
+  ): Promise<AccessToken> {
+    const identity = accountId
+      ? await this.dataSource.getRepository(User).findOneBy({ id: userId })
+      : null;
+    if (accountId && !(await this.memberships.resolveUser(userId, accountId)))
+      throw new UnauthorizedException();
+    const scope = accountId
+      ? [
+          { accountId, teamId: IsNull(), userId },
+          ...(String(identity?.accountId) === String(accountId)
+            ? [{ accountId: IsNull(), teamId: IsNull(), userId }]
+            : []),
+        ]
+      : { teamId: IsNull(), userId };
     const existing = await this.accessTokens.findOne({
-      where: { teamId: IsNull(), userId },
+      where: scope,
       order: { id: 'ASC' },
     });
 
@@ -479,6 +551,7 @@ export class AuthService {
     return this.accessTokens.save(
       this.accessTokens.create({
         userId,
+        accountId: accountId ?? null,
         sha256: this.hashApiToken(token),
         token: this.encryptApiToken(token),
         permissions: [...defaultApiTokenPermissions],
@@ -499,7 +572,15 @@ export class AuthService {
     }
   }
 
-  private async getUserRole(userId: string): Promise<string> {
+  private async getUserRole(
+    userId: string,
+    accountId?: string,
+  ): Promise<string> {
+    if (accountId)
+      return (
+        (await this.memberships.resolveUser(userId, accountId))?.role ??
+        'unknown'
+      );
     const user = await this.dataSource.getRepository(User).findOne({
       where: { id: userId },
     });

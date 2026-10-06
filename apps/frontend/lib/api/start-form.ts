@@ -1,6 +1,7 @@
 import { apiFetch } from "./http";
 
 export type StartForm = {
+  branding?: import("@repo/shared/branding").AccountBranding;
   account_name: string;
   template_name: string;
   shared_link: boolean;

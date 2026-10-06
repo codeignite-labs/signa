@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Handlebars from 'handlebars';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderEmailTemplate } from '../submissions/email-templates/render-email-template';
@@ -16,6 +17,10 @@ export class MailTemplateResolver {
   private readonly defaultCache = new Map<
     MailTemplateKey,
     DefaultMailTemplate
+  >();
+  private readonly htmlCache = new Map<
+    MailTemplateName,
+    Handlebars.TemplateDelegate
   >();
   private readonly templateExistsCache = new Map<string, boolean>();
 
@@ -42,6 +47,23 @@ export class MailTemplateResolver {
     if (!exists) {
       this.throwMissingTemplate(fileName);
     }
+  }
+
+  renderHtml(
+    template: MailTemplateName,
+    context: Record<string, unknown>,
+  ): string {
+    let render = this.htmlCache.get(template);
+    if (!render) {
+      const filename = `${template}.hbs`;
+      const path = this.getTemplateDirectories()
+        .map((directory) => join(directory, filename))
+        .find((candidate) => existsSync(candidate));
+      if (!path) this.throwMissingTemplate(filename);
+      render = Handlebars.compile(readFileSync(path, 'utf8'));
+      this.htmlCache.set(template, render);
+    }
+    return render(context);
   }
 
   renderDefault(

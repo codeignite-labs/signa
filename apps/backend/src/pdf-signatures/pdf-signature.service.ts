@@ -1,6 +1,9 @@
+import { CertificateChainValidationEngine } from 'pkijs';
+import { PdfTrustRootService } from './pdf-trust-root.service';
 import {
   Injectable,
   Logger,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -8,6 +11,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
 import signpdf from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
+import { createHash } from 'node:crypto';
+import { PadesSigner, p12SigningIdentity } from './pades-signer';
+import {
+  decryptSigningKey,
+  encryptSigningKey,
+  isEncryptedSigningKey,
+} from './signing-key-envelope';
+import { inspectP12Certificate } from './pdf-signature-certificate';
 import {
   SUBFILTER_ADOBE_PKCS7_DETACHED,
   SUBFILTER_ETSI_CADES_DETACHED,
@@ -16,12 +27,10 @@ import { PDFDocument } from 'pdf-lib';
 import { Repository } from 'typeorm';
 import { EncryptedConfig } from '../accounts/entities/encrypted-config.entity';
 import { PdfDssVriEmbedder } from './pdf-dss-vri-embedder';
-import { PdfDocumentTimestampEmbedder } from './pdf-document-timestamp-embedder';
 import { PdfAResult, PdfAService } from './pdf-a.service';
 import {
   defaultSigningCertificateKey,
   generateSignaDefaultCertificate,
-  hasInternalRevocation,
   parseStoredSigningCertificate,
   p12BufferFromStoredCertificate,
   signaDefaultCertificateName,
@@ -34,7 +43,11 @@ import {
   PdfLtvCollectionResult,
   PdfRevocationCollectorService,
 } from './pdf-revocation-collector.service';
-import { Rfc3161TimestampClient } from './rfc3161-timestamp-client';
+import {
+  parseTimestampServerUrls,
+  timestampEndpointLabel,
+  Rfc3161TimestampClient,
+} from './rfc3161-timestamp-client';
 
 export const pdfSignatureSubFilterModes = ['pades', 'adobe'] as const;
 
@@ -44,6 +57,7 @@ export type PdfSignatureSubFilterMode =
 export type PdfSignatureResult = {
   buffer: Buffer;
   certificateName: string | null;
+  certificateFingerprint?: string;
   pdfA: PdfAResult['metadata'];
   signed: boolean;
   signatureSubFilter: string;
@@ -61,10 +75,10 @@ export class PdfSignatureService {
     private readonly encryptedConfigs: Repository<EncryptedConfig>,
     private readonly config: ConfigService,
     private readonly timestampClient: Rfc3161TimestampClient,
-    private readonly timestampEmbedder: PdfDocumentTimestampEmbedder,
     private readonly revocationCollector: PdfRevocationCollectorService,
     private readonly dssVriEmbedder: PdfDssVriEmbedder,
     private readonly pdfAService: PdfAService,
+    @Optional() private readonly trustRoots?: PdfTrustRootService,
   ) {}
 
   async ensureDefaultCertificate(accountId: string): Promise<EncryptedConfig> {
@@ -76,24 +90,40 @@ export class PdfSignatureService {
     });
 
     if (existing) {
-      const existingCertificate = parseStoredSigningCertificate(existing.value);
-
-      if (!existingCertificate || !hasInternalRevocation(existingCertificate)) {
-        existing.value = JSON.stringify(generateSignaDefaultCertificate());
-
-        return this.encryptedConfigs.save(existing);
-      }
-
       return existing;
     }
 
-    return this.encryptedConfigs.save(
-      this.encryptedConfigs.create({
-        accountId,
-        key: `${signingCertificatePrefix}${signaDefaultCertificateName}`,
-        value: JSON.stringify(generateSignaDefaultCertificate()),
-      }),
-    );
+    try {
+      return await this.encryptedConfigs.save(
+        this.encryptedConfigs.create({
+          accountId,
+          key: `${signingCertificatePrefix}${signaDefaultCertificateName}`,
+          value: encryptSigningKey(
+            JSON.stringify(generateSignaDefaultCertificate()),
+            accountId,
+          ),
+        }),
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code !== '23505') throw error;
+      const winner = await this.encryptedConfigs.findOne({
+        where: {
+          accountId,
+          key: `${signingCertificatePrefix}${signaDefaultCertificateName}`,
+        },
+      });
+      if (!winner) throw error;
+      return winner;
+    }
+  }
+
+  async getActiveCertificateName(accountId: string): Promise<string> {
+    // Document cache metadata must not create, decrypt, or migrate signing keys.
+    const config = await this.encryptedConfigs.findOne({
+      where: { accountId, key: defaultSigningCertificateKey },
+    });
+
+    return config?.value || signaDefaultCertificateName;
   }
 
   async getTimestampServerUrl(accountId: string): Promise<string | null> {
@@ -140,12 +170,11 @@ export class PdfSignatureService {
     certificate: StoredSigningCertificate;
     name: string;
   }> {
-    await this.ensureDefaultCertificate(accountId);
-
     const defaultConfig = await this.encryptedConfigs.findOne({
       where: { accountId, key: defaultSigningCertificateKey },
     });
     const defaultName = defaultConfig?.value || signaDefaultCertificateName;
+    if (!defaultConfig) await this.ensureDefaultCertificate(accountId);
     const certificateConfig = await this.encryptedConfigs.findOne({
       where: {
         accountId,
@@ -153,21 +182,54 @@ export class PdfSignatureService {
       },
     });
 
-    if (!certificateConfig) {
-      return this.loadGeneratedCertificate(accountId);
-    }
-
-    const certificate = parseStoredSigningCertificate(certificateConfig.value);
-
-    if (!certificate) {
-      this.logger.warn(
-        `Skipping malformed signing certificate "${defaultName}" for account ${accountId}`,
+    if (!certificateConfig)
+      throw new UnprocessableEntityException(
+        'The active signing certificate is missing; select a valid identity',
       );
-
-      return this.loadGeneratedCertificate(accountId);
+    const plaintext = decryptSigningKey(certificateConfig.value, accountId);
+    const certificate = parseStoredSigningCertificate(plaintext);
+    if (!certificate)
+      throw new UnprocessableEntityException(
+        'The active signing certificate is malformed',
+      );
+    const inspection = inspectP12Certificate(
+      p12BufferFromStoredCertificate(certificate),
+      certificate.password ?? '',
+    );
+    Object.assign(certificate, inspection);
+    if (!isEncryptedSigningKey(certificateConfig.value)) {
+      certificateConfig.value = encryptSigningKey(plaintext, accountId);
+      await this.encryptedConfigs.save(certificateConfig);
     }
 
+    await this.assertSigningPolicy(certificate, accountId);
     return { certificate, name: defaultName };
+  }
+
+  async assertSigningPolicy(
+    certificate: StoredSigningCertificate,
+    accountId: string,
+  ): Promise<void> {
+    if (!this.config.get<boolean>('PDF_REQUIRE_TRUSTED_SIGNER', false)) return;
+    const identity = p12SigningIdentity(
+      p12BufferFromStoredCertificate(certificate),
+      certificate.password ?? '',
+    );
+    const trustedCerts =
+      (await this.trustRoots?.getTrustedCertificates(accountId)) ?? [];
+    if (!trustedCerts.length)
+      throw new UnprocessableEntityException(
+        'Upload an approved CA trust anchor before activating this signing identity',
+      );
+    const result = await new CertificateChainValidationEngine({
+      trustedCerts,
+      certs: [...identity.certificates.slice(1), identity.certificates[0]],
+      checkDate: new Date(),
+    }).verify({ passedWhenNotRevValues: true });
+    if (!result.result)
+      throw new UnprocessableEntityException(
+        'The signing certificate does not chain to an approved account CA',
+      );
   }
 
   async signPdf(input: {
@@ -212,12 +274,59 @@ export class PdfSignatureService {
           useObjectStreams: false,
         }),
       );
-      const signer = new P12Signer(
-        p12BufferFromStoredCertificate(certificate),
-        {
-          passphrase: certificate.password ?? '',
-        },
-      );
+      const timestampRequired =
+        this.config.get<boolean>('PDF_TIMESTAMP_REQUIRED', false) ||
+        this.config.get<boolean>('PDF_LTV_REQUIRED', false);
+      let timestamp: PdfTimestampEvidence = {
+        attempts: [],
+        embedded: false,
+        required: timestampRequired,
+        status: 'disabled',
+        tokenSha256: null,
+        url: null,
+      };
+      const serverUrls = parseTimestampServerUrls(timestampServerUrl);
+      if (timestampRequired && !serverUrls.length)
+        throw new Error(
+          'A trusted timestamp server is required by the signing policy',
+        );
+      if (
+        signatureSubFilter !== SUBFILTER_ETSI_CADES_DETACHED &&
+        (timestampRequired || serverUrls.length)
+      )
+        throw new Error('Timestamped signing requires PAdES mode');
+      const timestampSignature = async (signature: Buffer) => {
+        if (!serverUrls.length) return null;
+        const response = await this.timestampClient.requestTimestampToken({
+          digest: createHash('sha256').update(signature).digest(),
+          serverUrls,
+        });
+        timestamp = {
+          attempts: response.attempts,
+          embedded: !!response.token,
+          required: timestampRequired,
+          status: response.token ? 'embedded' : 'failed',
+          tokenSha256: response.token
+            ? createHash('sha256').update(response.token).digest('base64url')
+            : null,
+          url: response.url,
+        };
+        if (!response.token && timestampRequired)
+          throw new Error('A valid trusted TSA token is required');
+        return response.token;
+      };
+      const signer =
+        signatureSubFilter === SUBFILTER_ETSI_CADES_DETACHED
+          ? new PadesSigner(
+              p12SigningIdentity(
+                p12BufferFromStoredCertificate(certificate),
+                certificate.password ?? '',
+              ),
+              timestampSignature,
+            )
+          : new P12Signer(p12BufferFromStoredCertificate(certificate), {
+              passphrase: certificate.password ?? '',
+            });
 
       const signedBuffer = await signpdf.sign(
         prepared,
@@ -232,7 +341,10 @@ export class PdfSignatureService {
       });
       const revocationReadyAt = Date.now();
 
-      if (ltv.metadata.ltvRequired && ltv.metadata.evidenceStatus !== 'good') {
+      if (
+        ltv.metadata.evidenceStatus === 'revoked' ||
+        (ltv.metadata.ltvRequired && ltv.metadata.evidenceStatus !== 'good')
+      ) {
         throw new UnprocessableEntityException({
           error:
             'PDF LTV evidence could not be collected for the signer certificate',
@@ -246,18 +358,15 @@ export class PdfSignatureService {
         pdfBuffer: signedBuffer,
       });
       const dssReadyAt = Date.now();
-      const timestampedPdf =
-        await this.timestampEmbedder.embedDocumentTimestamp({
-          pdfBuffer: ltvPdf,
-          timestampServerUrl,
-        });
       const completedAt = Date.now();
 
-      const finalEvidenceStatus =
+      const finalEvidenceStatus: PdfLtvCollectionResult['metadata']['evidenceStatus'] =
         ltv.metadata.evidenceStatus === 'good' &&
         this.hasEmbeddedDssEvidence(signedBuffer, ltvPdf)
           ? 'good'
-          : ltv.metadata.evidenceStatus;
+          : ltv.metadata.evidenceStatus === 'good'
+            ? 'missing'
+            : ltv.metadata.evidenceStatus;
 
       const finalLtv = {
         ...ltv.metadata,
@@ -287,14 +396,17 @@ export class PdfSignatureService {
       );
 
       return {
-        buffer: timestampedPdf.buffer,
+        buffer: ltvPdf,
         certificateName: name,
+        certificateFingerprint: certificate.fingerprint_sha256,
         ltv: finalLtv,
         pdfA: pdfA.metadata,
         signatureSubFilter,
         signed: true,
-        timestamp: timestampedPdf.timestamp,
-        timestampServerUrl,
+        timestamp,
+        timestampServerUrl: serverUrls.length
+          ? serverUrls.map(timestampEndpointLabel).join(',')
+          : null,
       };
     } catch (error) {
       this.logger.error(
@@ -304,20 +416,6 @@ export class PdfSignatureService {
       );
       throw error;
     }
-  }
-
-  private async loadGeneratedCertificate(accountId: string): Promise<{
-    certificate: StoredSigningCertificate;
-    name: string;
-  }> {
-    const config = await this.ensureDefaultCertificate(accountId);
-    const certificate = parseStoredSigningCertificate(config.value);
-
-    if (!certificate) {
-      throw new Error('Generated Signa signing certificate is malformed');
-    }
-
-    return { certificate, name: signaDefaultCertificateName };
   }
 
   private getSignatureSubFilter(): string {

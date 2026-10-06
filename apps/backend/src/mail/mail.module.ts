@@ -1,3 +1,4 @@
+import { BrandingModule } from '../branding/branding.module';
 import { Module } from '@nestjs/common';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -27,6 +28,7 @@ import { EmailMessage } from './entities/email-message.entity';
 
 @Module({
   imports: [
+    BrandingModule,
     StorageModule,
     BullModule.registerQueue({ name: queueNames.mail }),
     BullBoardModule.forFeature({

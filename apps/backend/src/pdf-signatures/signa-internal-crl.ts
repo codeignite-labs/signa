@@ -1,6 +1,6 @@
 import { createSign } from 'node:crypto';
 import * as asn1js from 'asn1js';
-import { Certificate } from 'pkijs';
+import { Certificate, Extension, Extensions } from 'pkijs';
 
 export type SignaInternalCrlInput = {
   issuer: Certificate;
@@ -23,8 +23,9 @@ export function buildSignaInternalCrl(input: SignaInternalCrlInput): Buffer {
       new asn1js.Integer({ value: 1 }),
       signatureAlgorithm,
       input.issuer.subject.toSchema(),
-      new asn1js.GeneralizedTime({ valueDate: input.thisUpdate }),
-      new asn1js.GeneralizedTime({ valueDate: input.nextUpdate }),
+      crlTime(input.thisUpdate),
+      crlTime(input.nextUpdate),
+      crlExtensions(input),
     ],
   });
   const tbsDer = Buffer.from(tbsCertList.toBER(false));
@@ -40,6 +41,43 @@ export function buildSignaInternalCrl(input: SignaInternalCrlInput): Buffer {
   });
 
   return Buffer.from(certificateList.toBER(false));
+}
+
+function crlTime(date: Date) {
+  const valueDate = new Date(Math.floor(date.getTime() / 1000) * 1000);
+  return valueDate.getUTCFullYear() < 2050
+    ? new asn1js.UTCTime({ valueDate })
+    : new asn1js.GeneralizedTime({ valueDate });
+}
+
+function crlExtensions(input: SignaInternalCrlInput) {
+  const subjectKey = input.issuer.extensions?.find(
+    (ext) => ext.extnID === '2.5.29.14',
+  )?.parsedValue as asn1js.OctetString | undefined;
+  if (!subjectKey)
+    throw new Error('Internal CRL issuer requires a subject key identifier');
+  const authorityKey = new asn1js.Sequence({
+    value: [
+      new asn1js.Primitive({
+        idBlock: { tagClass: 3, tagNumber: 0 },
+        valueHex: subjectKey.getValue(),
+      }),
+    ],
+  });
+  const number = new asn1js.Integer({ value: input.thisUpdate.getTime() });
+  const extensions = new Extensions({
+    extensions: [
+      new Extension({
+        extnID: '2.5.29.35',
+        extnValue: authorityKey.toBER(false),
+      }),
+      new Extension({ extnID: '2.5.29.20', extnValue: number.toBER(false) }),
+    ],
+  });
+  return new asn1js.Constructed({
+    idBlock: { tagClass: 3, tagNumber: 0 },
+    value: [extensions.toSchema()],
+  });
 }
 
 function toExactArrayBuffer(buffer: Buffer): ArrayBuffer {

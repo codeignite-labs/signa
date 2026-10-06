@@ -143,6 +143,7 @@
     "moduleNameMapper": {
       "^otplib$": "<rootDir>/test/otplib.mock.ts",
       "^uuid$": "<rootDir>/test/uuid.mock.ts",
+      "^@repo/shared/branding$": "<rootDir>/../../../packages/shared/src/branding.ts",
       "^@repo/shared$": "<rootDir>/test/shared-package.mock.ts"
     }
   }

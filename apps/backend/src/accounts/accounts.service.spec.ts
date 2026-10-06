@@ -1,3 +1,5 @@
+import sharp from 'sharp';
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -16,6 +18,7 @@ import { EncryptedConfig } from './entities/encrypted-config.entity';
 type MockRepository<T extends object> = {
   create: jest.Mock<T, [Partial<T>]>;
   findOne: jest.Mock<Promise<T | null>>;
+  find: jest.Mock<Promise<T[]>>;
   findOneByOrFail: jest.Mock<Promise<T>>;
   save: jest.Mock<Promise<T>, [T]>;
 };
@@ -24,6 +27,7 @@ function createRepository<T extends object>(): jest.Mocked<MockRepository<T>> {
   return {
     create: jest.fn((input: Partial<T>) => input as T),
     findOne: jest.fn(),
+    find: jest.fn(),
     findOneByOrFail: jest.fn(),
     save: jest.fn((input: T) => Promise.resolve(input)),
   };
@@ -31,6 +35,11 @@ function createRepository<T extends object>(): jest.Mocked<MockRepository<T>> {
 
 describe('AccountsService', () => {
   let service: AccountsService;
+  const storage = {
+    createAttachment: jest.fn(),
+    deleteRecordAttachments: jest.fn(),
+    createBlobProxyUrl: jest.fn(),
+  };
   let accounts: jest.Mocked<MockRepository<Account>>;
   let accountConfigs: jest.Mocked<MockRepository<AccountConfig>>;
   let encryptedConfigs: jest.Mocked<MockRepository<EncryptedConfig>>;
@@ -38,6 +47,7 @@ describe('AccountsService', () => {
   let users: jest.Mocked<MockRepository<User>>;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     accounts = createRepository<Account>();
     accountConfigs = createRepository<AccountConfig>();
     encryptedConfigs = createRepository<EncryptedConfig>();
@@ -73,7 +83,7 @@ describe('AccountsService', () => {
         },
         {
           provide: StorageService,
-          useValue: {},
+          useValue: storage,
         },
         {
           provide: ConfigService,
@@ -107,6 +117,95 @@ describe('AccountsService', () => {
     }).compile();
 
     service = module.get<AccountsService>(AccountsService);
+  });
+
+  it('lists Gmail as the only supported email connection', async () => {
+    accounts.findOne.mockResolvedValue({ id: '17' } as Account);
+    encryptedConfigs.find.mockResolvedValue([]);
+    const result = await service.listEmailIntegrations('17');
+    expect(result.data.map((integration) => integration.provider)).toEqual([
+      'gmail',
+    ]);
+  });
+
+  it('rejects a new Microsoft email connection', async () => {
+    accounts.findOne.mockResolvedValue({ id: '17' } as Account);
+    await expect(
+      service.startEmailIntegrationConnect('17', 'microsoft'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('keeps the old logo when a new file is invalid', async () => {
+    accounts.findOne.mockResolvedValue({ id: '17' } as Account);
+    await expect(
+      service.uploadAccountLogo('17', {
+        buffer: Buffer.from('invalid'),
+        size: 7,
+        originalname: 'logo.png',
+        mimetype: 'image/png',
+      }),
+    ).rejects.toThrow('Upload a static');
+    expect(storage.deleteRecordAttachments).not.toHaveBeenCalled();
+    expect(storage.createAttachment).not.toHaveBeenCalled();
+  });
+
+  it('keeps the old logo when storage fails', async () => {
+    accounts.findOne.mockResolvedValue({ id: '17' } as Account);
+    const buffer = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: 'black' },
+    })
+      .png()
+      .toBuffer();
+    storage.createAttachment.mockRejectedValueOnce(
+      new Error('Storage unavailable'),
+    );
+    await expect(
+      service.uploadAccountLogo('17', {
+        buffer,
+        size: buffer.length,
+        originalname: 'logo.png',
+        mimetype: 'image/png',
+      }),
+    ).rejects.toThrow('Storage unavailable');
+    expect(storage.deleteRecordAttachments).not.toHaveBeenCalled();
+  });
+
+  it('publishes a sanitized logo before removing only older account logos', async () => {
+    accounts.findOne.mockResolvedValue({ id: '17' } as Account);
+    const buffer = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: 'black' },
+    })
+      .jpeg()
+      .toBuffer();
+    storage.createAttachment.mockResolvedValueOnce({
+      id: '25',
+      uuid: 'logo',
+      blob: { filename: 'account-logo.png', contentType: 'image/png' },
+    });
+    await service.uploadAccountLogo('17', {
+      buffer,
+      size: buffer.length,
+      originalname: 'unsafe.svg',
+      mimetype: 'image/svg+xml',
+    });
+    expect(storage.createAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordType: 'Account',
+        recordId: '17',
+        name: 'logo',
+        filename: 'account-logo.png',
+        contentType: 'image/png',
+      }),
+    );
+    expect(storage.deleteRecordAttachments).toHaveBeenCalledWith({
+      recordType: 'Account',
+      recordId: '17',
+      name: 'logo',
+      beforeId: '25',
+    });
+    expect(storage.createAttachment.mock.invocationCallOrder[0]).toBeLessThan(
+      storage.deleteRecordAttachments.mock.invocationCallOrder[0],
+    );
   });
 
   it('looks up active accounts by account id', async () => {

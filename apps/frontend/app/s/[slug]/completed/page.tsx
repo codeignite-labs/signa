@@ -7,5 +7,5 @@ export default async function PublicSigningCompletedPage({
 }) {
   const { slug } = await params;
 
-  return <CompletedSigningPage slug={slug} />;
+  return <CompletedSigningPage key={slug} slug={slug} />;
 }

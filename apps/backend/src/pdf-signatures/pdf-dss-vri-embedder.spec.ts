@@ -8,7 +8,8 @@ describe('PdfDssVriEmbedder', () => {
     pdf.addPage([200, 200]);
 
     const embedder = new PdfDssVriEmbedder();
-    const certificate = Buffer.from('shared-certificate-evidence');
+    // DER is binary: embedded delimiters and a trailing CR must be preserved.
+    const certificate = Buffer.from('shared-certificate\nendstream\r');
     const first = embedder.embed({
       evidences: [
         {

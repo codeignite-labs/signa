@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2Icon, TriangleAlertIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import { ApiError } from "@/lib/api/http";
 
 const supportedProviders = new Set<SocialAuthProvider>([
   "google",
-  "microsoft",
 ]);
 
 export default function OAuthCallbackPage() {
@@ -28,6 +27,7 @@ export default function OAuthCallbackPage() {
       ? (params.provider as SocialAuthProvider)
       : null;
   }, [params.provider]);
+  const callbackStarted = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const initialError = useMemo(() => {
     if (!provider) {
@@ -40,7 +40,7 @@ export default function OAuthCallbackPage() {
   }, [provider, searchParams]);
 
   useEffect(() => {
-    if (!provider || initialError) {
+    if (!provider || initialError || callbackStarted.current) {
       return;
     }
 
@@ -57,6 +57,7 @@ export default function OAuthCallbackPage() {
       return;
     }
 
+    callbackStarted.current = true;
     window.sessionStorage.removeItem(getSocialAuthStateKey(provider));
 
     completeSocialAuth(provider, { code, state })

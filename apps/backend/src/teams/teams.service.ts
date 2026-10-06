@@ -31,6 +31,7 @@ import {
 } from './team-response.mapper';
 import { createTeamSlug } from './team-slug';
 import { isTeamRole, type TeamRole } from './team-roles';
+import { AccountMembershipsService } from '../account-memberships/account-memberships.service';
 
 @Injectable()
 export class TeamsService {
@@ -44,6 +45,7 @@ export class TeamsService {
     @InjectRepository(User)
     private readonly users: Repository<User>,
     private readonly mail: MailService,
+    private readonly memberships: AccountMembershipsService,
   ) {}
 
   async createDefaultTeam(options: {
@@ -200,7 +202,12 @@ export class TeamsService {
       userId: options.input.user_id,
     });
     const existingMember = await this.teamMembers.findOne({
-      where: { teamId: options.teamId, userId: user.id },
+      where: {
+        accountId: options.accountId,
+        teamId: options.teamId,
+        userId: user.id,
+      },
+      withDeleted: true,
       relations: { user: true },
     });
     const role = this.normalizeRole(options.input.role);
@@ -338,33 +345,9 @@ export class TeamsService {
     token: string;
     user: User;
   }): Promise<TeamMemberResponseDto> {
-    const invitation = await this.findPendingInvitationByToken(options.token);
-
-    if (invitation.expiresAt.getTime() < Date.now()) {
-      invitation.status = 'expired';
-      await this.invitations.save(invitation);
-      throw new BadRequestException({ error: 'Invitation has expired' });
-    }
-
-    if (invitation.email !== options.user.email.toLowerCase()) {
-      throw new ForbiddenException({
-        error: 'Invitation belongs to a different email address',
-      });
-    }
-
-    const member = await this.addMember({
-      accountId: invitation.accountId,
-      actor: options.user,
-      input: { role: invitation.role, user_id: options.user.id },
-      skipPermissionCheck: true,
-      teamId: invitation.teamId,
-    });
-
-    invitation.acceptedAt = new Date();
-    invitation.status = 'accepted';
-    await this.invitations.save(invitation);
-
-    return member;
+    return toMemberResponse(
+      await this.memberships.acceptTeamInvitation(options.token, options.user),
+    );
   }
 
   async assertCanUseTeamAction(options: {
@@ -462,11 +445,10 @@ export class TeamsService {
     accountId: string;
     userId: string;
   }): Promise<User> {
-    const user = await this.users.findOneBy({
-      accountId: options.accountId,
-      archivedAt: IsNull(),
-      id: options.userId,
-    });
+    const user = await this.memberships.resolveUser(
+      options.userId,
+      options.accountId,
+    );
 
     if (!user) {
       throw new NotFoundException({ error: 'User not found' });

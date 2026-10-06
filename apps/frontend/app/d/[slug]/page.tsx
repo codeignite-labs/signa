@@ -7,5 +7,5 @@ export default async function PublicStartFormRoute({
 }) {
   const { slug } = await params;
 
-  return <StartFormPage slug={slug} />;
+  return <StartFormPage key={slug} slug={slug} />;
 }

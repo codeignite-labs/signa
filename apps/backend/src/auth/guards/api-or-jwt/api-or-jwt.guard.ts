@@ -68,11 +68,14 @@ export class ApiOrJwtGuard implements CanActivate {
     try {
       const payload =
         await this.jwtService.verifyAsync<WebSessionJwtPayload>(token);
+      const user = await this.authService.resolveSessionUser(payload);
+      if (!user) return false;
+      request.user = user;
       request.session = {
         userId: payload.userId,
         accountId: payload.accountId,
         isTestMode: payload.isTestMode,
-        role: payload.role,
+        role: user.role,
         teamId: payload.teamId,
         trueAccountId: payload.trueAccountId,
         trueUserId: payload.trueUserId,

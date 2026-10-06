@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import Link from "next/link";
 import { SettingsIcon } from "lucide-react";
 
@@ -13,25 +14,18 @@ export function ConsoleHeader() {
   const { dictionary } = useAppI18n();
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:gap-4">
       <Link
-        aria-label="Signa dashboard"
-        className="relative block h-14 w-28 shrink-0 sm:h-16 sm:w-32"
+        aria-label="Dashboard"
+        className="flex min-h-14 min-w-0 max-w-64 items-center sm:min-h-16 sm:max-w-80"
         href="/templates"
       >
-        <Image
-          alt="Signa"
-          className="object-contain object-left"
-          fill
-          priority
-          sizes="(max-width: 640px) 112px, 128px"
-          src="/images/logo.png"
-        />
+        <BrandLogo />
       </Link>
 
       <nav
         aria-label="Console navigation"
-        className="flex min-w-0 flex-1 items-center justify-end gap-2 text-sm font-bold sm:gap-3 sm:text-base"
+        className="flex items-center justify-end gap-2 text-sm font-bold sm:gap-3 sm:text-base"
       >
         <Button
           className="hidden h-8 rounded-full bg-[var(--auth-upgrade)] px-4 text-xs font-bold text-[var(--auth-primary)] hover:bg-[var(--auth-upgrade-hover)] sm:inline-flex"

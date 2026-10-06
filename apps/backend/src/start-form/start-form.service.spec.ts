@@ -45,6 +45,9 @@ describe('StartFormService', () => {
       dataSource as never,
       emailCodes as never,
       mailService as never,
+      {
+        get: jest.fn().mockResolvedValue({ account_name: 'Ada Labs' }),
+      } as never,
     );
   });
 

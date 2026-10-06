@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { AccountBranding } from "@repo/shared/branding";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CircleAlertIcon, HelpCircleIcon } from "lucide-react";
@@ -121,6 +123,7 @@ export function AccountSettingsBody() {
 }
 
 function AccountPanel() {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const { dictionary, setLocale } = useAppI18n();
   const [form, setForm] = useState<AccountFormState>(() =>
@@ -199,6 +202,11 @@ function AccountPanel() {
 
     try {
       const account = await updateAccount(patch);
+      const brandingKey = ["account-branding", account.id];
+      queryClient.setQueryData<AccountBranding>(brandingKey, (current) =>
+        current ? { ...current, account_name: account.name } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: brandingKey });
       const nextForm = getFormState(account);
 
       setForm(nextForm);

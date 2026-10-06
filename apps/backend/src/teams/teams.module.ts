@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountMembershipsModule } from '../account-memberships/account-memberships.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { UserHydrationGuard } from '../auth/guards/user-hydration/user-hydration.guard';
@@ -14,6 +15,7 @@ import { Team } from './entities/team.entity';
 
 @Module({
   imports: [
+    AccountMembershipsModule,
     AuthModule,
     UsersModule,
     AuthorizationModule,

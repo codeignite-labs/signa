@@ -84,7 +84,7 @@ export class AuthController {
   @Post('oauth/:provider/start')
   @ApiOperation({
     description:
-      'Creates a provider authorization URL for Google or Microsoft sign-in. The response includes a signed state value that the frontend stores and checks on callback before exchanging the authorization code.',
+      'Creates a provider authorization URL for Google sign-in. The response includes a signed state value that the frontend stores and checks on callback before exchanging the authorization code.',
     summary: 'Start OAuth sign-in',
   })
   @ApiOkResponse({ type: OAuthStartResponseDto })
@@ -98,7 +98,7 @@ export class AuthController {
   @Post('oauth/:provider/callback')
   @ApiOperation({
     description:
-      'Completes a Google or Microsoft authorization-code callback, validates the provider ID token, creates or reuses the Signa account by verified email, then returns the normal web session payload.',
+      'Completes a Google authorization-code callback, validates the provider ID token, creates or reuses the Signa account by verified email, then returns the normal web session payload.',
     summary: 'Complete OAuth sign-in',
   })
   @ApiOkResponse({ type: AuthResponseDto })
@@ -149,7 +149,10 @@ export class AuthController {
   })
   @ApiOkResponse({ type: ApiTokenResponseDto })
   apiToken(@Req() request: AuthenticatedRequest): Promise<ApiTokenResponseDto> {
-    return this.authService.getUserApiToken(request.session!.userId);
+    return this.authService.getUserApiToken(
+      request.session!.userId,
+      request.session!.accountId,
+    );
   }
 
   @Post('api-token/reveal')
@@ -168,6 +171,7 @@ export class AuthController {
     return this.authService.revealUserApiToken(
       request.session!.userId,
       body.password,
+      request.session!.accountId,
     );
   }
 
@@ -203,6 +207,7 @@ export class AuthController {
     return this.authService.updateUserApiTokenPermissions(
       request.session!.userId,
       body,
+      request.session!.accountId,
     );
   }
 }

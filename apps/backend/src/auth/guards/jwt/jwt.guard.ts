@@ -5,12 +5,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AccountMembershipsService } from '../../../account-memberships/account-memberships.service';
 import { AuthenticatedRequest } from '../../authenticated-request';
 import { WebSessionJwtPayload } from '../../web-session';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly memberships: AccountMembershipsService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -23,11 +27,17 @@ export class JwtGuard implements CanActivate {
     try {
       const payload =
         await this.jwtService.verifyAsync<WebSessionJwtPayload>(token);
+      const user = await this.memberships.resolveUser(
+        payload.userId,
+        payload.accountId,
+      );
+      if (!user) throw new UnauthorizedException();
+      request.user = user;
       request.session = {
         userId: payload.userId,
         accountId: payload.accountId,
         isTestMode: payload.isTestMode,
-        role: payload.role,
+        role: user.role,
         teamId: payload.teamId,
         trueAccountId: payload.trueAccountId,
         trueUserId: payload.trueUserId,

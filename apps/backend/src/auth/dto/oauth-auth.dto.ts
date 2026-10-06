@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
-export type OAuthAuthProvider = 'google' | 'microsoft';
+export type OAuthAuthProvider = 'google';
 
 export class OAuthStartDto {
   @ApiProperty({

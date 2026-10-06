@@ -1,7 +1,8 @@
 "use client";
 
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTopLoader } from "nextjs-toploader";
@@ -215,6 +216,7 @@ export function AuthShell({ mode }: AuthShellProps) {
           <RegistrationClosedMessage reason={registrationStatus?.reason} />
         ) : null}
         <form
+          method="post"
           className={cn(
             "mt-8 flex flex-col gap-5",
             mode === "register" && !canRegister ? "hidden" : "",
@@ -359,14 +361,7 @@ function AuthHeaderLogo({
       aria-label={dictionary.brand}
     >
       <span className="relative block size-11">
-        <Image
-          alt={dictionary.brand}
-          className="object-contain"
-          fill
-          priority
-          sizes="44px"
-          src="/images/logo.png"
-        />
+        <BrandLogo branding={null} />
       </span>
       <span className="text-2xl font-bold tracking-normal">Signa</span>
     </Link>
@@ -591,11 +586,6 @@ function SocialButtons({
         mode={mode}
         provider="google"
       />
-      <AuthProviderButton
-        dictionary={dictionary}
-        mode={mode}
-        provider="microsoft"
-      />
     </div>
   );
 }
@@ -609,9 +599,12 @@ function AuthProviderButton({
   mode: AuthMode;
   provider: SocialAuthProvider;
 }) {
-  const isGoogle = provider === "google";
+
+  const [pending, setPending] = useState(false);
 
   async function handleProviderClick() {
+    if (pending) return;
+    setPending(true);
     try {
       const response = await startSocialAuth(provider, {
         mode: mode === "register" ? "register" : "login",
@@ -623,24 +616,28 @@ function AuthProviderButton({
       );
       window.location.assign(response.url);
     } catch (error) {
-      toast.error("Social sign-in is not configured", {
+      toast.error("Google sign-in could not start", {
         description:
           error instanceof ApiError
             ? error.message
             : "Add the OAuth client id, client secret, and redirect URI environment variables.",
       });
+    } finally {
+      setPending(false);
     }
   }
 
   return (
     <Button
       className="h-12 rounded-full border-2 border-[var(--auth-primary)] bg-card text-sm font-bold text-[var(--auth-foreground)] transition-colors hover:bg-[var(--auth-primary)] hover:text-[var(--auth-primary-foreground)]"
+      aria-busy={pending}
+      disabled={pending}
       onClick={() => void handleProviderClick()}
       type="button"
       variant="outline"
     >
-      {isGoogle ? <GoogleMark /> : <MicrosoftMark />}
-      {isGoogle ? dictionary.social.google : dictionary.social.microsoft}
+      <GoogleMark />
+      {dictionary.social.google}
     </Button>
   );
 }
@@ -670,26 +667,6 @@ function GoogleMark() {
         d="M46.1454545,24 C46.1454545,22.6133333 45.9318182,21.12 45.6113636,19.7333333 L23.7136364,19.7333333 L23.7136364,28.8 L36.3181818,28.8 C35.6879545,31.8912 33.9724545,34.2677333 31.5177727,35.8144 L39.0249545,41.6181333 C43.3393409,37.6138667 46.1454545,31.6490667 46.1454545,24"
         fill="#4285F4"
       />
-    </svg>
-  );
-}
-
-function MicrosoftMark() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="size-5"
-      viewBox="0 0 48 48"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M6 6H22V22H6z" fill="#ff5722" transform="rotate(-180 14 14)" />
-      <path d="M26 6H42V22H26z" fill="#4caf50" transform="rotate(-180 34 14)" />
-      <path
-        d="M26 26H42V42H26z"
-        fill="#ffc107"
-        transform="rotate(-180 34 34)"
-      />
-      <path d="M6 26H22V42H6z" fill="#03a9f4" transform="rotate(-180 14 34)" />
     </svg>
   );
 }

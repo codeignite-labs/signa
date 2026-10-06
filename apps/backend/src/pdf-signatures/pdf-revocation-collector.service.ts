@@ -1,15 +1,19 @@
+import {
+  validateOcspEvidence,
+  validateCrlEvidence,
+  parseBasicOcspResponse,
+  parseCrl,
+} from './revocation-evidence-validation';
+import { fetchPki } from './pki-http';
+import {
+  parsePemCertificates,
+  signatureValidationPaths,
+} from './certificate-validation-path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import * as asn1js from 'asn1js';
-import {
-  BasicOCSPResponse,
-  Certificate,
-  CertificateRevocationList,
-  id_PKIX_OCSP_Basic,
-  OCSPRequest,
-  OCSPResponse,
-} from 'pkijs';
+import { BasicOCSPResponse, Certificate, OCSPRequest } from 'pkijs';
 import {
   certificateToDer,
   ParsedPdfCmsSignature,
@@ -90,40 +94,125 @@ export class PdfRevocationCollectorService {
   async validateEmbeddedEvidence(input: {
     evidence: ParsedPdfDssEvidence;
     parsed: ParsedPdfCmsSignature;
+    validationTime?: Date;
   }): Promise<PdfRevocationEvidenceStatus | 'missing'> {
     if (!input.evidence.hasMatchingVri) {
       return 'missing';
     }
 
-    const [signer, issuer] = findSignerAndIssuer(input.parsed);
-
-    if (!signer || !issuer) {
-      return 'unknown';
-    }
-
-    for (const ocsp of input.evidence.ocspResponses) {
-      const status = await this.validateOcspEvidence(ocsp, signer, issuer);
-
-      if (status === 'good' || status === 'revoked') {
-        return status;
+    try {
+      const additional = input.evidence.certificateDer.map(
+        (der) =>
+          new Certificate({
+            schema: asn1js.fromBER(toArrayBuffer(der)).result,
+          }),
+      );
+      const paths = await signatureValidationPaths(
+        input.parsed.signedData,
+        additional,
+      );
+      const statuses: Array<PdfRevocationEvidenceStatus | 'missing'> = [];
+      for (const path of paths) {
+        for (let index = 0; index < path.certificates.length - 1; index++) {
+          statuses.push(
+            await this.validateCertificateEvidence(
+              input.evidence,
+              path.certificates[index],
+              path.certificates[index + 1],
+              input.validationTime,
+            ),
+          );
+        }
       }
+      return summarizeEvidenceStatuses(statuses);
+    } catch {
+      return 'missing';
     }
+  }
 
-    for (const crl of input.evidence.crlResponses) {
-      const status = await this.validateCrlEvidence(crl, signer, issuer);
-
-      if (status === 'good' || status === 'revoked') {
-        return status;
-      }
+  private async validateCertificateEvidence(
+    evidence: ParsedPdfDssEvidence,
+    signer: Certificate,
+    issuer: Certificate,
+    validationTime?: Date,
+  ): Promise<PdfRevocationEvidenceStatus | 'missing'> {
+    for (const ocsp of evidence.ocspResponses) {
+      const status = await validateOcspEvidence(
+        ocsp,
+        signer,
+        issuer,
+        validationTime,
+      );
+      if (status === 'good' || status === 'revoked') return status;
     }
-
-    return input.evidence.ocspResponses.length ||
-      input.evidence.crlResponses.length
+    for (const crl of evidence.crlResponses) {
+      const status = await validateCrlEvidence(
+        crl,
+        signer,
+        issuer,
+        validationTime,
+      );
+      if (status === 'good' || status === 'revoked') return status;
+    }
+    return evidence.ocspResponses.length || evidence.crlResponses.length
       ? 'unknown'
       : 'missing';
   }
 
   private async collectForCmsSignature(input: {
+    accountId: string;
+    internalRevocation: StoredSigningCertificateRevocation | null;
+    parsed: ParsedPdfCmsSignature;
+  }): Promise<{
+    dssEvidence: PdfDssEvidence;
+    status: PdfRevocationEvidenceStatus | 'missing';
+  }> {
+    const dssEvidence: PdfDssEvidence = {
+      certificateDer: [],
+      crlResponses: [],
+      ocspResponses: [],
+      vriKey: input.parsed.vriKey,
+    };
+    try {
+      const paths = await signatureValidationPaths(
+        input.parsed.signedData,
+        parsePemCertificates(
+          this.config.get<string>('PDF_TSA_TRUST_CERTIFICATES', ''),
+        ),
+      );
+      const statuses: Array<PdfRevocationEvidenceStatus | 'missing'> = [];
+      for (const path of paths) {
+        dssEvidence.certificateDer.push(
+          ...path.certificates.map(certificateToDer),
+        );
+        for (let index = 0; index < path.certificates.length - 1; index++) {
+          const key =
+            index === 0
+              ? input.internalRevocation?.crl_issuer_private_key_pem
+              : input.internalRevocation?.root_crl_issuer_private_key_pem;
+          const result = await this.collectForCertificate({
+            ...input,
+            internalRevocation:
+              !path.isTimestamp && key
+                ? { crl_issuer_private_key_pem: key }
+                : null,
+            parsed: {
+              ...input.parsed,
+              certificates: path.certificates.slice(index),
+            },
+          });
+          statuses.push(result.status);
+          dssEvidence.crlResponses.push(...result.dssEvidence.crlResponses);
+          dssEvidence.ocspResponses.push(...result.dssEvidence.ocspResponses);
+        }
+      }
+      return { dssEvidence, status: summarizeEvidenceStatuses(statuses) };
+    } catch {
+      return { dssEvidence, status: 'missing' };
+    }
+  }
+
+  private async collectForCertificate(input: {
     accountId: string;
     internalRevocation: StoredSigningCertificateRevocation | null;
     parsed: ParsedPdfCmsSignature;
@@ -163,7 +252,7 @@ export class PdfRevocationCollectorService {
           ocspResponses: [cachedOcspData],
           vriKey: input.parsed.vriKey,
         },
-        status: cachedOcsp.status,
+        status: await validateOcspEvidence(cachedOcspData, signer, issuer),
       };
     }
 
@@ -243,7 +332,11 @@ export class PdfRevocationCollectorService {
           ocspResponses: [],
           vriKey: input.vriKey,
         },
-        status: cachedCrl.status,
+        status: await validateCrlEvidence(
+          cachedCrlData,
+          input.signer,
+          input.issuer,
+        ),
       };
     }
 
@@ -260,7 +353,7 @@ export class PdfRevocationCollectorService {
         nextUpdate,
         thisUpdate,
       });
-      const status = await this.validateCrlEvidence(
+      const status = await validateCrlEvidence(
         data,
         input.signer,
         input.issuer,
@@ -331,16 +424,14 @@ export class PdfRevocationCollectorService {
           hashAlgorithm: 'SHA-1',
           issuerCertificate: input.issuer,
         });
-        const response = await fetch(url, {
+        const response = await fetchPki(url, {
           body: Buffer.from(request.toSchema(true).toBER(false)),
           headers: {
             Accept: 'application/ocsp-response',
             'Content-Type': 'application/ocsp-request',
           },
           method: 'POST',
-          signal: AbortSignal.timeout(
-            this.config.get<number>('PDF_LTV_HTTP_TIMEOUT_MS', 10_000),
-          ),
+          timeoutMs: this.config.get<number>('PDF_LTV_HTTP_TIMEOUT_MS', 10_000),
         });
 
         if (!response.ok) {
@@ -351,7 +442,7 @@ export class PdfRevocationCollectorService {
           response,
           maxOcspResponseBytes,
         );
-        const status = await this.validateOcspEvidence(
+        const status = await validateOcspEvidence(
           data,
           input.signer,
           input.issuer,
@@ -411,7 +502,13 @@ export class PdfRevocationCollectorService {
     if (cached) {
       return {
         data: cachedEvidenceData(cached),
-        status: cached.status,
+        status: cachedEvidenceData(cached)
+          ? await validateCrlEvidence(
+              cachedEvidenceData(cached)!,
+              input.signer,
+              input.issuer,
+            )
+          : 'unavailable',
       };
     }
 
@@ -431,11 +528,9 @@ export class PdfRevocationCollectorService {
 
     for (const url of urls) {
       try {
-        const response = await fetch(url, {
+        const response = await fetchPki(url, {
           headers: { Accept: 'application/pkix-crl,*/*' },
-          signal: AbortSignal.timeout(
-            this.config.get<number>('PDF_LTV_HTTP_TIMEOUT_MS', 10_000),
-          ),
+          timeoutMs: this.config.get<number>('PDF_LTV_HTTP_TIMEOUT_MS', 10_000),
         });
 
         if (!response.ok) {
@@ -446,7 +541,7 @@ export class PdfRevocationCollectorService {
           response,
           maxCrlResponseBytes,
         );
-        const status = await this.validateCrlEvidence(
+        const status = await validateCrlEvidence(
           data,
           input.signer,
           input.issuer,
@@ -511,64 +606,6 @@ export class PdfRevocationCollectorService {
     this.inFlightCollections.set(key, pending);
     return pending;
   }
-
-  private async validateOcspEvidence(
-    data: Buffer,
-    signer: Certificate,
-    issuer: Certificate,
-  ): Promise<PdfRevocationEvidenceStatus> {
-    const response = parseOcspResponse(data);
-
-    if (!response) {
-      return 'unknown';
-    }
-
-    try {
-      const certificateStatus = await response.getCertificateStatus(
-        signer,
-        issuer,
-      );
-      const verified = await response.verify(issuer);
-
-      if (!verified || !certificateStatus.isForCertificate) {
-        return 'unknown';
-      }
-
-      return certificateStatus.status === 0 ? 'good' : 'revoked';
-    } catch {
-      return 'unknown';
-    }
-  }
-
-  private async validateCrlEvidence(
-    data: Buffer,
-    signer: Certificate,
-    issuer: Certificate,
-  ): Promise<PdfRevocationEvidenceStatus> {
-    const crl = parseCrl(data);
-
-    if (!crl) {
-      return 'unknown';
-    }
-
-    try {
-      const verified = await crl.verify({ issuerCertificate: issuer });
-
-      if (!verified) {
-        return 'unknown';
-      }
-
-      const signerSerial = certificateSerial(signer);
-      const revoked = (crl.revokedCertificates ?? []).some(
-        (certificate) =>
-          certificate.userCertificate.valueBlock.toString() === signerSerial,
-      );
-
-      return revoked ? 'revoked' : 'good';
-    } catch {
-      return 'unknown';
-    }
-  }
 }
 
 type CollectedEvidence = {
@@ -607,6 +644,24 @@ function getExtensionHttpUrls(certificate: Certificate, oid: string): string[] {
     return [];
   }
 
+  if (oid === '1.3.6.1.5.5.7.1.1') {
+    const access = extension.parsedValue as
+      | {
+          accessDescriptions?: Array<{
+            accessMethod: string;
+            accessLocation: { type: number; value: string };
+          }>;
+        }
+      | undefined;
+    return (access?.accessDescriptions ?? [])
+      .filter(
+        (entry) =>
+          entry.accessMethod === '1.3.6.1.5.5.7.48.1' &&
+          entry.accessLocation.type === 6,
+      )
+      .map((entry) => entry.accessLocation.value)
+      .filter((value) => /^https?:\/\//.test(value));
+  }
   return [...collectHttpUrls(extension.toJSON())];
 }
 
@@ -629,56 +684,6 @@ function collectHttpUrls(value: unknown): Set<string> {
   }
 
   return urls;
-}
-
-function parseOcspResponse(data: Buffer): OCSPResponse | null {
-  try {
-    const asn1 = asn1js.fromBER(toArrayBuffer(data));
-
-    if (asn1.offset === -1) {
-      return null;
-    }
-
-    return new OCSPResponse({ schema: asn1.result });
-  } catch {
-    return null;
-  }
-}
-
-function parseBasicOcspResponse(data: Buffer): BasicOCSPResponse | null {
-  const response = parseOcspResponse(data);
-
-  if (!response?.responseBytes?.response) {
-    return null;
-  }
-
-  if (response.responseBytes.responseType !== id_PKIX_OCSP_Basic) {
-    return null;
-  }
-
-  const asn1 = asn1js.fromBER(
-    response.responseBytes.response.valueBlock.valueHex,
-  );
-
-  if (asn1.offset === -1) {
-    return null;
-  }
-
-  return new BasicOCSPResponse({ schema: asn1.result });
-}
-
-function parseCrl(data: Buffer): CertificateRevocationList | null {
-  try {
-    const asn1 = asn1js.fromBER(toArrayBuffer(data));
-
-    if (asn1.offset === -1) {
-      return null;
-    }
-
-    return new CertificateRevocationList({ schema: asn1.result });
-  } catch {
-    return null;
-  }
 }
 
 function getOcspThisUpdate(response: BasicOCSPResponse | null): Date | null {

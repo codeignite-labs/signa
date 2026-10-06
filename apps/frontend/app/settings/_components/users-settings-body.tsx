@@ -43,6 +43,7 @@ import {
 import { ApiError } from "@/lib/api/http"
 import {
   addTeamMember,
+  createTeamInvitation,
   listTeamMembers,
   listTeams,
   removeTeamMember,
@@ -70,7 +71,7 @@ const emptyUserForm: UserFormState = {
   firstName: "",
   lastName: "",
   password: "",
-  role: "admin",
+  role: "member",
   teamId: "",
   teamRole: "member",
 }
@@ -179,12 +180,19 @@ function UsersPanel() {
         : await createUser(getCreateUserInput(form))
 
       if (!editingUser || hasTeamChanges) {
-        await syncUserTeam(savedUser)
+        if (savedUser.membership_status === "invited" && form.teamId) {
+          await createTeamInvitation(form.teamId, {
+            email: savedUser.email,
+            role: form.teamRole,
+          })
+        } else if (savedUser.membership_status !== "invited") {
+          await syncUserTeam(savedUser)
+        }
       }
       setUsers((current) => upsertUser(current, savedUser))
       setIsDialogOpen(false)
       await loadUsers()
-      toast.success(editingUser ? "User updated" : "User added")
+      toast.success(savedUser.membership_status === "invited" ? "Invitation sent" : editingUser ? "User updated" : "User added")
     } catch (error) {
       toast.error(editingUser ? "User update failed" : "User invite failed", {
         description: getErrorMessage(error),
@@ -309,6 +317,7 @@ function UsersPanel() {
                 <UserForm
                   form={form}
                   isEditing={Boolean(editingUser)}
+                  sharedIdentity={Boolean(editingUser?.shared_identity)}
                   teams={teams}
                   onChange={setForm}
                 />
@@ -374,7 +383,7 @@ function UsersPanel() {
                   {user.role}
                 </span>
               </span>
-              <span className="text-sm text-muted-foreground">—</span>
+              <span className="text-sm capitalize text-muted-foreground">{user.membership_status ?? "Active"}</span>
               <div className="flex justify-end gap-2">
                 {status === "archived" ? (
                   <Button
@@ -465,11 +474,13 @@ function getCreateUserInput(form: UserFormState): CreateUserInput {
 function UserForm({
   form,
   isEditing,
+  sharedIdentity,
   teams,
   onChange,
 }: {
   form: UserFormState
   isEditing: boolean
+  sharedIdentity: boolean
   teams: Team[]
   onChange: (form: UserFormState) => void
 }) {
@@ -477,17 +488,20 @@ function UserForm({
     <>
       <div className="grid gap-5 md:grid-cols-2">
         <FieldInput
+          disabled={sharedIdentity}
           label="First name"
           onChange={(firstName) => onChange({ ...form, firstName })}
           value={form.firstName}
         />
         <FieldInput
+          disabled={sharedIdentity}
           label="Last name"
           onChange={(lastName) => onChange({ ...form, lastName })}
           value={form.lastName}
         />
       </div>
       <FieldInput
+        disabled={sharedIdentity}
         label="Email"
         onChange={(email) => onChange({ ...form, email })}
         required
@@ -496,9 +510,8 @@ function UserForm({
       />
       {!isEditing ? (
         <FieldInput
-          label="Password"
+          label="Password (optional; leave blank to email an invitation)"
           onChange={(password) => onChange({ ...form, password })}
-          required
           type="password"
           value={form.password}
         />
@@ -626,10 +639,12 @@ function FieldInput({
   type = "text",
   value,
   required = false,
+  disabled = false,
 }: {
   label: string
   onChange: (value: string) => void
   required?: boolean
+  disabled?: boolean
   type?: string
   value: string
 }) {
@@ -645,6 +660,7 @@ function FieldInput({
         name={id}
         onChange={(event) => onChange(event.target.value)}
         required={required}
+        disabled={disabled}
         type={type}
         value={value}
       />

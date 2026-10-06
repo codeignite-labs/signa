@@ -3,7 +3,7 @@ import { IsOptional, IsString } from 'class-validator';
 
 export class AccountEmailIntegrationResponseDto {
   @ApiProperty({ example: 'gmail' })
-  provider!: 'gmail' | 'microsoft';
+  provider!: 'gmail';
 
   @ApiProperty({ example: 'Gmail' })
   name!: string;
@@ -28,7 +28,7 @@ export class AccountEmailIntegrationListResponseDto {
 
 export class AccountEmailIntegrationConnectResponseDto {
   @ApiProperty({ example: 'gmail' })
-  provider!: 'gmail' | 'microsoft';
+  provider!: 'gmail';
 
   @ApiProperty({ example: false })
   connected!: boolean;

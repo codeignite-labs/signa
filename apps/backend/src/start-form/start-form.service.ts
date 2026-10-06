@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { BrandingService } from '../branding/branding.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { EmailVerificationCodeService } from '../mail/email-verification-code.service';
@@ -34,6 +35,7 @@ export class StartFormService {
     private readonly dataSource: DataSource,
     private readonly emailVerificationCodes: EmailVerificationCodeService,
     private readonly mailService: MailService,
+    private readonly branding: BrandingService,
   ) {}
 
   async getStartForm(slug: string): Promise<StartFormResponseDto> {
@@ -345,8 +347,11 @@ export class StartFormService {
     }
   }
 
-  private toStartFormResponse(template: Template): StartFormResponseDto {
+  private async toStartFormResponse(
+    template: Template,
+  ): Promise<StartFormResponseDto> {
     return {
+      branding: await this.branding.get(template.accountId),
       account_name: template.account?.name ?? 'Signa',
       link_form_fields: getLinkFormFields(template),
       require_email_2fa: template.preferences?.shared_link_2fa === true,

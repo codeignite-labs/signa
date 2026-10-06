@@ -1,7 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import {
+  verifySignatureTimestamp,
+  hasPadesAttributes,
+} from './pdf-signature-timestamp';
+import { Injectable, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { cmsSignerCertificate } from '../pdf-signatures/timestamp-validation';
+import { parsePemCertificates } from '../pdf-signatures/certificate-validation-path';
 import { createHash } from 'node:crypto';
 import {
-  BasicOCSPResponse,
   Certificate,
   CertificateRevocationList,
   SignedData,
@@ -40,17 +46,17 @@ export type PdfCmsVerificationResult = {
   messages: string[];
   revocationStatus: 'good' | 'missing' | 'revoked' | 'unavailable' | 'unknown';
   ltvStatus: 'invalid' | 'missing' | 'valid';
+  timestampValid: boolean | null;
   trustAnchor: string | null;
   trustAnchorFingerprint: string | null;
 };
-
-const signaRootCommonName = 'Signa Root CA';
 
 @Injectable()
 export class PdfSignatureVerifierService {
   constructor(
     private readonly dssVriEmbedder: PdfDssVriEmbedder,
     private readonly revocationCollector: PdfRevocationCollectorService,
+    @Optional() private readonly config?: ConfigService,
   ) {}
 
   prepareDssRead(pdfBuffer: Buffer): PdfDssReadContext {
@@ -84,12 +90,18 @@ export class PdfSignatureVerifierService {
       ]);
     }
 
-    const signaTrustRoots = findSignaTrustRoots(parsed.certificates);
-    const trustedRoots = [
-      ...signaTrustRoots,
-      ...(input.trustedCertificates ?? []),
-    ];
-    const policy = getCertificatePolicy(parsed.certificates);
+    const trustedRoots = input.trustedCertificates ?? [];
+    const timestamp = await verifySignatureTimestamp(parsed.signedData, [
+      ...trustedRoots,
+      ...parsePemCertificates(
+        this.config?.get<string>('PDF_TSA_TRUST_CERTIFICATES', '') ?? '',
+      ),
+    ]);
+    const policy = getCertificatePolicy(
+      parsed.certificates,
+      timestamp.time ?? new Date(),
+      parsed.signedData,
+    );
     const chainStatus = getCertificateChainStatus({
       certificates: parsed.certificates,
       policyErrors: policy.errors,
@@ -108,12 +120,13 @@ export class PdfSignatureVerifierService {
       await this.revocationCollector.validateEmbeddedEvidence({
         evidence: dssEvidence,
         parsed,
+        validationTime: timestamp.time ?? undefined,
       });
     const revocationStatus =
       dssRevocationStatus === 'missing'
         ? embeddedRevocationStatus
         : dssRevocationStatus;
-    const ltvStatus = getLtvStatus({
+    const evidenceLtvStatus = getLtvStatus({
       hasMatchingVri: dssEvidence.hasMatchingVri,
       revocationStatus,
     });
@@ -121,6 +134,7 @@ export class PdfSignatureVerifierService {
     try {
       const verification = await parsed.signedData.verify({
         checkChain: trustedRoots.length > 0,
+        checkDate: timestamp.time ?? new Date(),
         data: toArrayBuffer(signedBytes),
         extendedMode: true,
         passedWhenNotRevValues: true,
@@ -129,13 +143,26 @@ export class PdfSignatureVerifierService {
       });
       const signatureValid = verification.signatureVerified === true;
       const chainTrusted =
-        chainStatus === 'trusted' &&
+        trustedRoots.length > 0 &&
         policy.errors.length === 0 &&
-        verification.signerCertificateVerified !== false;
+        verification.signerCertificateVerified === true;
+      const ltvStatus =
+        signatureValid &&
+        chainTrusted &&
+        timestamp.valid === true &&
+        hasPadesAttributes(parsed.signedData)
+          ? evidenceLtvStatus
+          : evidenceLtvStatus === 'missing'
+            ? 'missing'
+            : 'invalid';
 
       return {
         certificateChain: parsed.certificates.map(certificateToResponse),
-        certificateChainStatus: chainTrusted ? 'trusted' : chainStatus,
+        certificateChainStatus: chainTrusted
+          ? 'trusted'
+          : chainStatus === 'trusted'
+            ? 'invalid'
+            : chainStatus,
         certificatePolicyErrors: policy.errors,
         cmsMessageDigestValid: signatureValid,
         cmsSignatureValid: signatureValid,
@@ -144,19 +171,22 @@ export class PdfSignatureVerifierService {
             ? 'cms_signature_valid: CMS signature and signed attributes verify against the PDF ByteRange digest'
             : 'cms_signature_invalid: CMS signature verification failed',
           chainTrusted
-            ? 'certificate_chain_trusted: signer certificate chains to the embedded Signa Root CA'
+            ? 'certificate_chain_trusted: signer certificate chains to a configured trust anchor'
             : chainMessage(chainStatus),
           revocationMessage(revocationStatus),
           ltvMessage(ltvStatus),
+          timestamp.message,
         ],
         ltvStatus,
         revocationStatus,
+        timestampValid: timestamp.valid,
         trustAnchor: chainTrusted ? (trustAnchor?.subject ?? null) : null,
         trustAnchorFingerprint: chainTrusted
           ? (trustAnchor?.fingerprintSha256 ?? null)
           : null,
       };
     } catch (error) {
+      const ltvStatus = evidenceLtvStatus === 'missing' ? 'missing' : 'invalid';
       const messages = [
         cmsErrorMessage(error),
         chainMessage(chainStatus),
@@ -166,13 +196,15 @@ export class PdfSignatureVerifierService {
 
       return {
         certificateChain: parsed.certificates.map(certificateToResponse),
-        certificateChainStatus: chainStatus,
+        certificateChainStatus:
+          chainStatus === 'trusted' ? 'invalid' : chainStatus,
         certificatePolicyErrors: policy.errors,
         cmsMessageDigestValid: isMessageDigestFailure(error) ? false : null,
         cmsSignatureValid: false,
         ltvStatus,
         messages,
         revocationStatus,
+        timestampValid: timestamp.valid,
         trustAnchor: null,
         trustAnchorFingerprint: null,
       };
@@ -193,21 +225,7 @@ function getEmbeddedRevocationStatus(
     return 'missing';
   }
 
-  if (
-    ocspResponses.every((response) => response instanceof BasicOCSPResponse)
-  ) {
-    return 'good';
-  }
-
   return 'unknown';
-}
-
-function findSignaTrustRoots(certificates: Certificate[]): Certificate[] {
-  return certificates.filter((certificate) =>
-    formatCertificateName(certificate.subject.typesAndValues).includes(
-      `CN=${signaRootCommonName}`,
-    ),
-  );
 }
 
 function getCertificateChainStatus(input: {
@@ -284,11 +302,20 @@ function certificateFingerprint(certificate: Certificate): string {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
-function getCertificatePolicy(certificates: Certificate[]): {
+function getCertificatePolicy(
+  certificates: Certificate[],
+  now: Date,
+  cms: SignedData,
+): {
   errors: string[];
 } {
-  const now = new Date();
   const errors: string[] = [];
+  let signer: Certificate;
+  try {
+    signer = cmsSignerCertificate(cms);
+  } catch {
+    return { errors: ['certificate_signer_missing'] };
+  }
 
   certificates.forEach((certificate, index) => {
     const label =
@@ -299,7 +326,7 @@ function getCertificatePolicy(certificates: Certificate[]): {
       errors.push(`certificate_expired: ${label}`);
     }
 
-    if (index > 0 && !hasCaBasicConstraints(certificate)) {
+    if (certificate !== signer && !hasCaBasicConstraints(certificate)) {
       errors.push(`certificate_not_ca: ${label}`);
     }
   });
@@ -369,6 +396,7 @@ function missingCmsResult(
       'ltv_missing: no matching DSS/VRI entry was found for this signature',
     ],
     revocationStatus: 'missing',
+    timestampValid: null,
     trustAnchor: null,
     trustAnchorFingerprint: null,
   };

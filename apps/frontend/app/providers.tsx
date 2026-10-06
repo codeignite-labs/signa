@@ -10,6 +10,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 
 import { AuthRouteGuard } from "./auth-route-guard"
+import { AccountBrandingProvider } from "@/components/branding/account-branding-provider"
 import { TestModeAlert } from "./test-mode-alert"
 
 type ProvidersProps = {
@@ -43,7 +44,9 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <NuqsAdapter>
       <QueryClientProvider client={queryClient}>
-        <AuthRouteGuard>{children}</AuthRouteGuard>
+        <AccountBrandingProvider>
+          <AuthRouteGuard>{children}</AuthRouteGuard>
+        </AccountBrandingProvider>
         <TestModeAlert />
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>

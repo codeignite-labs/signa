@@ -2,6 +2,7 @@
 
 import type React from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -228,8 +229,7 @@ function ProfilePanel() {
         description="Send signature request to your recipients directly from your email"
         title="Email Integration"
       >
-        <IntegrationButton provider="google" />
-        <IntegrationButton provider="microsoft" />
+        <IntegrationButton />
       </ProfileSection>
 
       <AssetSection
@@ -611,15 +611,14 @@ function PrimaryButton({
   );
 }
 
-function IntegrationButton({ provider }: { provider: "google" | "microsoft" }) {
+function IntegrationButton() {
   return (
     <Button
       className="h-12 w-full rounded-full border-2 border-[var(--auth-primary)] bg-card font-bold text-[var(--auth-foreground)] hover:bg-[var(--auth-primary)] hover:text-[var(--auth-primary-foreground)]"
-      type="button"
+      asChild
       variant="outline"
     >
-      {provider === "google" ? <GoogleMark /> : <MicrosoftMark />}
-      {provider === "google" ? "CONNECT GMAIL" : "CONNECT MICROSOFT"}
+      <Link href="/settings/integrations"><GoogleMark />CONNECT GMAIL</Link>
     </Button>
   );
 }
@@ -649,17 +648,6 @@ function GoogleMark() {
         d="M46.1454545,24 C46.1454545,22.6133333 45.9318182,21.12 45.6113636,19.7333333 L23.7136364,19.7333333 L23.7136364,28.8 L36.3181818,28.8 C35.6879545,31.8912 33.9724545,34.2677333 31.5177727,35.8144 L39.0249545,41.6181333 C43.3393409,37.6138667 46.1454545,31.6490667 46.1454545,24"
         fill="#4285F4"
       />
-    </svg>
-  );
-}
-
-function MicrosoftMark() {
-  return (
-    <svg aria-hidden="true" className="size-5" viewBox="0 0 48 48">
-      <path d="M6 6H22V22H6z" fill="#ff5722" />
-      <path d="M26 6H42V22H26z" fill="#4caf50" />
-      <path d="M26 26H42V42H26z" fill="#ffc107" />
-      <path d="M6 26H22V42H6z" fill="#03a9f4" />
     </svg>
   );
 }

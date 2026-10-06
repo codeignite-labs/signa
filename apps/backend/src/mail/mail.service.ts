@@ -33,7 +33,7 @@ type SentMessageInfo = {
   response?: string;
 };
 
-type EmailIntegrationProvider = 'gmail' | 'microsoft';
+type EmailIntegrationProvider = 'gmail';
 
 type EmailIntegrationConfig = {
   provider?: EmailIntegrationProvider;
@@ -127,6 +127,10 @@ export class MailService implements OnModuleInit {
     let info: SentMessageInfo;
 
     try {
+      mail.context = {
+        ...mail.context,
+        ...(await this.branding.getAccountContext(mail.accountId)),
+      };
       info = await this.send(mail);
     } catch (error) {
       const failure = normalizeMailFailure(error);
@@ -206,15 +210,31 @@ export class MailService implements OnModuleInit {
     });
   }
 
+  sendAccountInvitation(input: {
+    accountId: string;
+    accountName: string;
+    email: string;
+    firstName?: string | null;
+  }): Promise<MailDeliveryResult> {
+    return this.sendUserInvitation({
+      ...input,
+      token: '',
+      existingIdentity: true,
+    });
+  }
+
   sendUserInvitation(input: {
     accountId: string;
     accountName: string;
     email: string;
     firstName?: string | null;
     token: string;
+    existingIdentity?: boolean;
   }): Promise<MailDeliveryResult> {
     const invitationUrl = this.branding.getFrontendUrl(
-      `/auth/reset-password?token=${encodeURIComponent(input.token)}`,
+      input.existingIdentity
+        ? '/settings/accounts'
+        : `/auth/reset-password?token=${encodeURIComponent(input.token)}`,
     );
 
     const subject = this.t('mail.subjects.user_invitation', {
@@ -228,6 +248,7 @@ export class MailService implements OnModuleInit {
       subject,
       template: 'user-invitation',
       context: {
+        existingIdentity: input.existingIdentity,
         ...this.branding.getBaseContext(),
         accountName: input.accountName,
         actionLabel: this.t('mail.actions.accept_invitation', {
@@ -407,7 +428,7 @@ export class MailService implements OnModuleInit {
       return null;
     }
 
-    const html = renderProviderHtml(input);
+    const html = this.templates.renderHtml(input.template, input.context ?? {});
     const from = value.email
       ? {
           email: value.email,
@@ -425,16 +446,6 @@ export class MailService implements OnModuleInit {
       };
     }
 
-    if (value.provider === 'microsoft') {
-      await this.sendWithMicrosoft(input, html, accessToken);
-
-      return {
-        accepted: formatRecipients(input.to),
-        rejected: [],
-        response: 'sent-via-microsoft',
-      };
-    }
-
     return null;
   }
 
@@ -442,10 +453,7 @@ export class MailService implements OnModuleInit {
     accountId: string,
   ): Promise<EncryptedConfig | null> {
     return this.encryptedConfigs.findOne({
-      where: [
-        { accountId, key: 'email_integration:gmail' },
-        { accountId, key: 'email_integration:microsoft' },
-      ],
+      where: { accountId, key: 'email_integration:gmail' },
       order: { key: 'ASC' },
     });
   }
@@ -498,7 +506,7 @@ export class MailService implements OnModuleInit {
       return null;
     }
 
-    const settings = this.getProviderSettings(value.provider);
+    const settings = this.getProviderSettings();
     const response = await fetch(settings.tokenUrl, {
       body: new URLSearchParams({
         client_id: settings.clientId,
@@ -558,65 +566,16 @@ export class MailService implements OnModuleInit {
     }
   }
 
-  private async sendWithMicrosoft(
-    input: SendTemplateMailInput,
-    html: string,
-    accessToken: string,
-  ): Promise<void> {
-    const response = await fetch(
-      'https://graph.microsoft.com/v1.0/me/sendMail',
-      {
-        body: JSON.stringify({
-          message: {
-            subject: input.subject,
-            body: {
-              contentType: 'HTML',
-              content: html,
-            },
-            toRecipients: toMicrosoftRecipients(input.to),
-            replyTo: input.replyTo ? toMicrosoftRecipients(input.replyTo) : [],
-            attachments: (input.attachments ?? []).map(toMicrosoftAttachment),
-          },
-          saveToSentItems: true,
-        }),
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      },
-    );
-
-    if (!response.ok) {
-      throw new InternalServerErrorException({
-        error: `Microsoft rejected message: ${await response.text()}`,
-      });
-    }
-  }
-
-  private getProviderSettings(provider: EmailIntegrationProvider): {
+  private getProviderSettings(): {
     clientId: string;
     clientSecret: string;
     tokenUrl: string;
   } {
-    return provider === 'gmail'
-      ? {
-          clientId: this.config.get<string>('GMAIL_OAUTH_CLIENT_ID', ''),
-          clientSecret: this.config.get<string>(
-            'GMAIL_OAUTH_CLIENT_SECRET',
-            '',
-          ),
-          tokenUrl: 'https://oauth2.googleapis.com/token',
-        }
-      : {
-          clientId: this.config.get<string>('MICROSOFT_OAUTH_CLIENT_ID', ''),
-          clientSecret: this.config.get<string>(
-            'MICROSOFT_OAUTH_CLIENT_SECRET',
-            '',
-          ),
-          tokenUrl:
-            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-        };
+    return {
+      clientId: this.config.get<string>('GMAIL_OAUTH_CLIENT_ID', ''),
+      clientSecret: this.config.get<string>('GMAIL_OAUTH_CLIENT_SECRET', ''),
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+    };
   }
 
   private formatDefaultFrom(): string {
@@ -729,51 +688,6 @@ function normalizeStringArray(value: unknown): string[] {
     : [];
 }
 
-function renderProviderHtml(input: SendTemplateMailInput): string {
-  const context = input.context ?? {};
-  const headline =
-    stringValue(context.headline) ?? stringValue(context.subject);
-  const contentHtml = stringValue(context.contentHtml);
-  const actionUrl = stringValue(context.actionUrl);
-  const actionLabel = stringValue(context.actionLabel) ?? 'Open';
-  const logoUrl = stringValue(context.logoUrl);
-
-  return `<!doctype html>
-<html>
-<body style="margin:0;padding:0;background:#eef4f8;color:#173457;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eef4f8;">
-    <tr>
-      <td align="center" style="padding:32px 12px;">
-        <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:100%;background:#ffffff;border-radius:22px;overflow:hidden;">
-          ${
-            logoUrl
-              ? `<tr><td align="center" style="padding:34px 24px 12px;"><img src="${escapeHtml(logoUrl)}" width="142" alt="Signa" style="display:block;width:142px;max-width:142px;height:auto;border:0;"></td></tr>`
-              : ''
-          }
-          <tr>
-            <td style="padding:28px 40px 42px;">
-              ${
-                headline
-                  ? `<h1 style="margin:0 0 22px;color:#0d1f36;font-size:40px;line-height:48px;font-weight:800;">${escapeHtml(headline)}</h1>`
-                  : ''
-              }
-              <div style="color:#50657b;font-size:18px;line-height:30px;">${contentHtml ?? ''}</div>
-              ${
-                actionUrl
-                  ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:28px 0;"><tr><td align="center" bgcolor="#173457" style="border-radius:999px;"><a href="${escapeHtml(actionUrl)}" style="display:block;padding:17px 28px;color:#ffffff;font-size:17px;line-height:22px;font-weight:700;text-decoration:none;border-radius:999px;">${escapeHtml(actionLabel)}</a></td></tr></table>`
-                  : ''
-              }
-            </td>
-          </tr>
-        </table>
-        <p style="margin:22px 0 0;color:#8b9caf;font-size:13px;line-height:20px;">Sent securely with Signa</p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
 function buildMimeMessage(
   input: SendTemplateMailInput,
   html: string,
@@ -808,33 +722,6 @@ function buildMimeMessage(
   return [...headers, '', ...parts].join('\r\n');
 }
 
-function toMicrosoftRecipients(input: MailAddress | MailAddress[] | string) {
-  const recipients = Array.isArray(input) ? input : [input];
-
-  return recipients.map((recipient) => {
-    const address =
-      typeof recipient === 'string'
-        ? { email: recipient }
-        : { email: recipient.email, name: recipient.name ?? undefined };
-
-    return {
-      emailAddress: {
-        address: address.email,
-        ...(address.name ? { name: address.name } : {}),
-      },
-    };
-  });
-}
-
-function toMicrosoftAttachment(attachment: MailAttachment) {
-  return {
-    '@odata.type': '#microsoft.graph.fileAttachment',
-    name: attachment.filename ?? 'attachment',
-    contentType: attachment.contentType ?? 'application/octet-stream',
-    contentBytes: attachmentToBase64(attachment),
-  };
-}
-
 function parseEmailIntegrationConfig(value: string): EmailIntegrationConfig {
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -844,10 +731,7 @@ function parseEmailIntegrationConfig(value: string): EmailIntegrationConfig {
     }
 
     return {
-      provider:
-        parsed.provider === 'gmail' || parsed.provider === 'microsoft'
-          ? parsed.provider
-          : undefined,
+      provider: parsed.provider === 'gmail' ? parsed.provider : undefined,
       email: typeof parsed.email === 'string' ? parsed.email : null,
       access_token:
         typeof parsed.access_token === 'string'
@@ -909,10 +793,6 @@ function escapeMimeParameter(value: string): string {
   return value.replace(/"/g, '\\"');
 }
 
-function stringValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null;
-}
-
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
 }
@@ -962,14 +842,6 @@ function normalizeMailFailure(error: unknown): {
   return {
     message: typeof error === 'string' ? error : JSON.stringify(error),
   };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

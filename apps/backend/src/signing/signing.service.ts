@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BrandingService } from '../branding/branding.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -72,6 +73,7 @@ export class SigningService {
     private readonly config: ConfigService,
     private readonly emailVerificationCodes: EmailVerificationCodeService,
     private readonly phoneVerification: PhoneVerificationService,
+    private readonly branding: BrandingService,
   ) {}
 
   async getSigningForm(
@@ -1263,7 +1265,15 @@ export class SigningService {
   ): Promise<SigningResponseDto> {
     const submission = submitter.submission;
 
+    const [branding, documents, attachments, configs] = await Promise.all([
+      this.branding.get(submitter.accountId),
+      this.serializeDocuments(submission),
+      this.serializeSubmitterAttachments(submitter),
+      this.getSigningFormConfigs(submitter.accountId),
+    ]);
+
     return {
+      branding,
       submission_id: submission.id,
       title: submission.name ?? submission.template?.name ?? 'Document',
       submitter: {
@@ -1276,12 +1286,12 @@ export class SigningService {
         completed_at: submitter.completedAt,
         declined_at: submitter.declinedAt,
       },
-      documents: await this.serializeDocuments(submission),
+      documents,
       fields: this.getSubmitterFields(submitter),
       values: submitter.values ?? {},
       readonly_values: this.getReadonlyValues(submitter),
-      attachments: await this.serializeSubmitterAttachments(submitter),
-      configs: await this.getSigningFormConfigs(submitter.accountId),
+      attachments,
+      configs,
     };
   }
 

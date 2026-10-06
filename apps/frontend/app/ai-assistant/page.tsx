@@ -1,4 +1,5 @@
-import Image from "next/image"
+import { BrandName } from "@/components/branding/brand-name";
+import { BrandLogo } from "@/components/branding/brand-logo";
 import Link from "next/link"
 import {
   ArrowUpIcon,
@@ -32,14 +33,7 @@ export default function AiAssistantPage() {
     >
       <header className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between px-6">
         <Link className="flex items-center gap-3" href="/">
-          <Image
-            alt="Signa"
-            className="h-10 w-auto object-contain"
-            height={40}
-            priority
-            src="/images/logo.png"
-            width={120}
-          />
+          <BrandLogo />
         </Link>
         <nav
           aria-label="AI assistant"
@@ -57,9 +51,9 @@ export default function AiAssistantPage() {
           <div className="flex items-start gap-3 px-6 py-5">
             <SparklesIcon className="mt-1 size-5 text-[var(--auth-primary)]" />
             <div className="space-y-5">
-              <h1 className="text-base font-bold">Ask Signa AI</h1>
+              <h1 className="text-base font-bold">Ask <BrandName /> AI</h1>
               <p className="max-w-[520px] text-center text-sm leading-6 text-[var(--auth-label)]">
-                Signa AI can help you learn about product features, pricing,
+                <BrandName /> AI can help you learn about product features, pricing,
                 guide you through different workflows, and generate integration
                 code.
               </p>
@@ -71,7 +65,7 @@ export default function AiAssistantPage() {
             </h2>
             <div className="rounded-[24px] border border-[var(--auth-input-border)] bg-[var(--auth-background)] p-4 shadow-inner">
               <input
-                aria-label="Ask Signa AI"
+                aria-label="Ask AI"
                 className="mb-6 h-7 w-full rounded bg-transparent text-base text-[var(--auth-foreground)] outline-none placeholder:text-[var(--auth-placeholder)] focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="Send a message... (@ to mention, / for commands)"
                 type="text"
@@ -88,7 +82,7 @@ export default function AiAssistantPage() {
                   </Button>
                   <button className="flex items-center gap-2 text-sm font-medium text-[var(--auth-foreground)]">
                     <SparklesIcon className="size-4 text-[var(--auth-primary)]" />
-                    Signa AI
+                    <BrandName /> AI
                   </button>
                 </div>
                 <div className="flex items-center gap-3">

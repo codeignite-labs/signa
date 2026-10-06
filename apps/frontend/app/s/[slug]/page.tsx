@@ -10,5 +10,5 @@ export default async function PublicSigningPage({
   const { slug } = await params;
   const { f, t } = await searchParams;
 
-  return <SigningPage focusFieldPrefix={f} slug={slug} trackingParam={t} />;
+  return <SigningPage key={slug} focusFieldPrefix={f} slug={slug} trackingParam={t} />;
 }

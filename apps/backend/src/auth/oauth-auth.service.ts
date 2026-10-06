@@ -1,7 +1,11 @@
+import { AuthService } from './auth.service';
+import {
+  googleOAuthConfig,
+  type OAuthProviderConfig,
+} from './google-oauth-config';
 import {
   BadRequestException,
   Injectable,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -28,7 +32,6 @@ import {
 } from './dto/oauth-auth.dto';
 import { hashPassword } from './passwords';
 import { assertRegistrationAllowed } from './registration-policy';
-import { WebSessionJwtPayload } from './web-session';
 
 type OAuthStatePayload = {
   issued_at: number;
@@ -68,21 +71,10 @@ type ProviderJsonWebKey = NodeJsonWebKey & {
   kid?: string;
 };
 
-type OAuthProviderConfig = {
-  authorizationEndpoint: string;
-  clientId: string;
-  clientSecret: string;
-  issuer: 'google' | 'microsoft';
-  jwksUri: string;
-  redirectUri: string;
-  scopes: string[];
-  tokenEndpoint: string;
-  userinfoEndpoint: string;
-};
-
 @Injectable()
 export class OAuthAuthService {
   constructor(
+    private readonly authService: AuthService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
     private readonly jwtService: JwtService,
@@ -94,7 +86,7 @@ export class OAuthAuthService {
   ): OAuthStartResponseDto {
     this.assertProvider(provider);
 
-    const config = this.getProviderConfig(provider);
+    const config = googleOAuthConfig(this.configService);
     const statePayload: OAuthStatePayload = {
       issued_at: Date.now(),
       mode: input.mode ?? 'login',
@@ -112,11 +104,6 @@ export class OAuthAuthService {
     url.searchParams.set('nonce', statePayload.nonce);
 
     if (provider === 'google') {
-      url.searchParams.set('prompt', 'select_account');
-    }
-
-    if (provider === 'microsoft') {
-      url.searchParams.set('response_mode', 'query');
       url.searchParams.set('prompt', 'select_account');
     }
 
@@ -141,7 +128,7 @@ export class OAuthAuthService {
       });
     }
 
-    const config = this.getProviderConfig(options.provider);
+    const config = googleOAuthConfig(this.configService);
     const tokenResponse = await this.exchangeCode(config, options.code);
 
     if (!tokenResponse.id_token) {
@@ -156,12 +143,9 @@ export class OAuthAuthService {
       state.nonce,
     );
     const email = this.resolveVerifiedEmail(claims);
-    const { account, user } = await this.findOrCreateUserFromOAuth(
-      email,
-      claims,
-    );
+    const { user } = await this.findOrCreateUserFromOAuth(email, claims);
 
-    return this.createAuthResponse(user, account);
+    return this.authService.createLoginResponse(user);
   }
 
   private async exchangeCode(
@@ -182,11 +166,12 @@ export class OAuthAuthService {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       method: 'POST',
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
       throw new UnauthorizedException({
-        error: `OAuth token exchange failed: ${await response.text()}`,
+        error: 'OAuth token exchange failed',
       });
     }
 
@@ -200,6 +185,10 @@ export class OAuthAuthService {
   ): Promise<OAuthIdTokenClaims> {
     const [encodedHeader, encodedPayload, encodedSignature] =
       idToken.split('.');
+
+    if (idToken.split('.').length !== 3) {
+      throw new UnauthorizedException({ error: 'Invalid OAuth ID token' });
+    }
 
     if (!encodedHeader || !encodedPayload || !encodedSignature) {
       throw new UnauthorizedException({ error: 'Invalid OAuth ID token' });
@@ -243,6 +232,7 @@ export class OAuthAuthService {
   ): Promise<ProviderJsonWebKey> {
     const response = await fetch(jwksUri, {
       headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
@@ -276,7 +266,7 @@ export class OAuthAuthService {
       });
     }
 
-    if (!claims.exp || claims.exp * 1000 <= Date.now()) {
+    if (typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now()) {
       throw new UnauthorizedException({
         error: 'OAuth ID token is expired',
       });
@@ -299,19 +289,10 @@ export class OAuthAuthService {
       }
       return;
     }
-
-    if (
-      !claims.iss?.startsWith('https://login.microsoftonline.com/') ||
-      !claims.iss.endsWith('/v2.0')
-    ) {
-      throw new UnauthorizedException({
-        error: 'Microsoft ID token issuer is invalid',
-      });
-    }
   }
 
   private resolveVerifiedEmail(claims: OAuthIdTokenClaims): string {
-    const email = claims.email ?? claims.preferred_username;
+    const email = claims.email;
 
     if (!email) {
       throw new UnauthorizedException({
@@ -319,12 +300,7 @@ export class OAuthAuthService {
       });
     }
 
-    if (
-      claims.email &&
-      claims.email_verified !== undefined &&
-      claims.email_verified !== true &&
-      claims.email_verified !== 'true'
-    ) {
+    if (claims.email_verified !== true && claims.email_verified !== 'true') {
       throw new UnauthorizedException({
         error: 'OAuth provider email is not verified',
       });
@@ -343,7 +319,7 @@ export class OAuthAuthService {
     });
 
     if (existingUser) {
-      if (existingUser.archivedAt || existingUser.account.archivedAt) {
+      if (existingUser.archivedAt) {
         throw new UnauthorizedException({ error: 'Account is archived' });
       }
 
@@ -427,97 +403,14 @@ export class OAuthAuthService {
     };
   }
 
-  private createAuthResponse(user: User, account: Account): AuthResponseDto {
-    const payload: WebSessionJwtPayload = {
-      accountId: user.accountId,
-      role: user.role,
-      sub: user.id,
-      userId: user.id,
-    };
-
-    return {
-      access_token: this.jwtService.sign(payload),
-      account: {
-        id: account.id,
-        is_test_mode: false,
-        locale: account.locale,
-        name: account.name,
-        production_account_id: null,
-        testing_account_id: null,
-        timezone: account.timezone,
-      },
-      user: {
-        email: user.email,
-        first_name: user.firstName,
-        id: user.id,
-        last_name: user.lastName,
-        otp_required_for_login: user.otpRequiredForLogin,
-        role: user.role,
-      },
-    };
-  }
-
-  private getProviderConfig(provider: OAuthAuthProvider): OAuthProviderConfig {
-    if (provider === 'google') {
-      return this.assertConfigured({
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        clientId: this.configService.get<string>('GOOGLE_AUTH_CLIENT_ID', ''),
-        clientSecret: this.configService.get<string>(
-          'GOOGLE_AUTH_CLIENT_SECRET',
-          '',
-        ),
-        issuer: 'google',
-        jwksUri: 'https://www.googleapis.com/oauth2/v3/certs',
-        redirectUri: this.configService.get<string>(
-          'GOOGLE_AUTH_REDIRECT_URI',
-          '',
-        ),
-        scopes: ['openid', 'email', 'profile'],
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        userinfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
-      });
-    }
-
-    return this.assertConfigured({
-      authorizationEndpoint:
-        'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-      clientId: this.configService.get<string>('MICROSOFT_AUTH_CLIENT_ID', ''),
-      clientSecret: this.configService.get<string>(
-        'MICROSOFT_AUTH_CLIENT_SECRET',
-        '',
-      ),
-      issuer: 'microsoft',
-      jwksUri: 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
-      redirectUri: this.configService.get<string>(
-        'MICROSOFT_AUTH_REDIRECT_URI',
-        '',
-      ),
-      scopes: ['openid', 'email', 'profile'],
-      tokenEndpoint:
-        'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-      userinfoEndpoint: 'https://graph.microsoft.com/oidc/userinfo',
-    });
-  }
-
   private assertProvider(
     provider: string,
   ): asserts provider is OAuthAuthProvider {
-    if (provider !== 'google' && provider !== 'microsoft') {
+    if (provider !== 'google') {
       throw new BadRequestException({
         error: 'Unsupported OAuth provider',
       });
     }
-  }
-
-  private assertConfigured(config: OAuthProviderConfig): OAuthProviderConfig {
-    if (!config.clientId || !config.clientSecret || !config.redirectUri) {
-      throw new ServiceUnavailableException({
-        error:
-          'OAuth provider is not configured. Set the client id, client secret, and redirect URI environment variables.',
-      });
-    }
-
-    return config;
   }
 
   private signState(payload: OAuthStatePayload): string {
@@ -534,7 +427,7 @@ export class OAuthAuthService {
   private verifyState(state: string): OAuthStatePayload {
     const [encodedPayload, signature] = state.split('.');
 
-    if (!encodedPayload || !signature) {
+    if (!encodedPayload || !signature || state.split('.').length !== 2) {
       throw new UnauthorizedException({ error: 'Invalid OAuth state' });
     }
 
@@ -559,8 +452,9 @@ export class OAuthAuthService {
 
     if (
       !payload.issued_at ||
+      payload.issued_at > Date.now() ||
       Date.now() - payload.issued_at > maxAgeMs ||
-      (payload.provider !== 'google' && payload.provider !== 'microsoft')
+      payload.provider !== 'google'
     ) {
       throw new UnauthorizedException({ error: 'OAuth state expired' });
     }

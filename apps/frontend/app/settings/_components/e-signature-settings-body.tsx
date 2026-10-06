@@ -9,7 +9,6 @@ import {
   CircleXIcon,
   FileTextIcon,
   IdCardIcon,
-  PlusIcon,
   ShieldCheckIcon,
   Trash2Icon,
   UploadCloudIcon,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -46,6 +44,8 @@ import {
 } from "@/lib/api/auth";
 import { verifyPdfFile, type VerifyPdfResponse } from "@/lib/api/tools";
 import { isEqual } from "@/lib/object-diff";
+import { SigningCertificatesSection } from "./signing-certificates-section";
+import { CertificateUploadDialog } from "./certificate-upload-dialog";
 import { SettingsSidebar } from "./settings-sidebar";
 
 const filenameFormats: Array<{
@@ -156,9 +156,7 @@ function ESignaturePanel() {
       setTimestampServerUrl(nextCertificates.timestamp_server_url ?? "");
       toast.success("Signing certificate uploaded");
     } catch (error) {
-      toast.error("Signing certificate upload failed", {
-        description: getErrorMessage(error),
-      });
+      throw error;
     }
   }
 
@@ -168,7 +166,7 @@ function ESignaturePanel() {
 
     setCertificates(nextCertificates.data);
     setTimestampServerUrl(nextCertificates.timestamp_server_url ?? "");
-    toast.success("Default certificate updated");
+    toast.success("Active signing identity updated");
   }
 
   async function removeCertificate(name: string) {
@@ -188,9 +186,7 @@ function ESignaturePanel() {
       setTrustRoots(nextTrustRoots.data);
       toast.success("Trust root uploaded");
     } catch (error) {
-      toast.error("Trust root upload failed", {
-        description: getErrorMessage(error),
-      });
+      throw error;
     }
   }
 
@@ -232,7 +228,7 @@ function ESignaturePanel() {
   }
 
   return (
-    <section className="min-w-0 flex-1">
+    <section className="w-full min-w-0 md:flex-1">
       <h1 className="text-4xl font-bold tracking-normal">PDF Signature</h1>
       <p className="mt-5">Upload signed PDF file to validate its signature:</p>
       <PdfVerificationDropzone isVerifying={isVerifying} onFile={verifyPdf} />
@@ -276,56 +272,19 @@ function TrustRootsSection({
 }) {
   return (
     <div className="mt-10">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-normal">
             Trusted Certificate Authorities
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Upload public root CA certificates for external customer or partner
-            PDFs that should verify as trusted in this workspace.
+            Approve public CA certificates for signing identities and PDF verification in this workspace. Uploading a private CA does not make it publicly trusted.
           </p>
         </div>
-        <TrustRootUploadButton onUpload={onUpload} />
+        <CertificateUploadDialog kind="trust" onUpload={onUpload} />
       </div>
       <TrustRootTable onRemove={onRemove} trustRoots={trustRoots} />
     </div>
-  );
-}
-
-function TrustRootUploadButton({
-  onUpload,
-}: {
-  onUpload: (file: File, name: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <>
-      <Button
-        className="h-12 rounded-full px-6"
-        onClick={() => inputRef.current?.click()}
-        type="button"
-        variant="secondary"
-      >
-        <ShieldCheckIcon data-icon="inline-start" />
-        UPLOAD ROOT
-      </Button>
-      <input
-        accept=".pem,.crt,.cer,.der,application/x-x509-ca-cert"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-
-          if (file) {
-            onUpload(file, file.name.replace(/\.[^.]+$/, ""));
-            event.currentTarget.value = "";
-          }
-        }}
-        ref={inputRef}
-        type="file"
-      />
-    </>
   );
 }
 
@@ -384,81 +343,6 @@ function TrustRootTable({
   );
 }
 
-function SigningCertificatesSection({
-  certificates,
-  onMakeDefault,
-  onRemove,
-  onTimestampServerSave,
-  onUpload,
-  timestampServerUrl,
-}: {
-  certificates: SigningCertificate[];
-  onMakeDefault: (name: string) => Promise<void>;
-  onRemove: (name: string) => Promise<void>;
-  onTimestampServerSave: (value: string) => Promise<void>;
-  onUpload: (file: File, name: string, password: string) => Promise<void>;
-  timestampServerUrl: string;
-}) {
-  return (
-    <>
-      <div className="mt-10 flex items-end justify-between gap-4">
-        <h2 className="text-3xl font-bold tracking-normal">
-          Signing Certificates
-        </h2>
-        <CertificateUploadButton onUpload={onUpload} />
-      </div>
-      <CertificateTable
-        certificates={certificates}
-        onMakeDefault={onMakeDefault}
-        onRemove={onRemove}
-      />
-      <TimestampServerForm
-        key={timestampServerUrl}
-        onSave={onTimestampServerSave}
-        timestampServerUrl={timestampServerUrl}
-      />
-    </>
-  );
-}
-
-function TimestampServerForm({
-  onSave,
-  timestampServerUrl,
-}: {
-  onSave: (value: string) => Promise<void>;
-  timestampServerUrl: string;
-}) {
-  const [nextTimestampServerUrl, setNextTimestampServerUrl] =
-    useState(timestampServerUrl);
-  const hasChanges =
-    nextTimestampServerUrl.trim() !== timestampServerUrl.trim();
-
-  return (
-    <div className="mt-8 max-w-xl space-y-3">
-      <Label htmlFor="timestamp-server-url">Timestamp server URL</Label>
-      <div className="flex gap-3">
-        <input
-          className="h-12 min-w-0 flex-1 rounded-full border bg-transparent px-5 outline-none"
-          id="timestamp-server-url"
-          name="timestampServerUrl"
-          onChange={(event) => setNextTimestampServerUrl(event.target.value)}
-          placeholder="URL (optional)"
-          type="url"
-          value={nextTimestampServerUrl}
-        />
-        <Button
-          className="h-12 rounded-full px-6"
-          disabled={!hasChanges}
-          onClick={() => void onSave(nextTimestampServerUrl)}
-          type="button"
-        >
-          SAVE
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function ESignaturePreferences({
   onSave,
   preferences,
@@ -485,7 +369,7 @@ function ESignaturePreferences({
           void onSave({ flatten_result_pdf })
         }
       />
-      <div className="rounded-2xl border border-[var(--auth-input-border)] bg-[var(--auth-muted)]/50 p-4">
+      <div className="rounded-2xl border border-border bg-card p-4">
         <PreferenceSwitch
           checked={preferences.auto_sign_owner_enabled}
           label="Auto-sign the account owner role when creating submissions"
@@ -546,7 +430,10 @@ function ESignaturePreferences({
           }
           value={preferences.document_filename_format}
         >
-          <SelectTrigger className="h-12 rounded-full" id="document-filename-format">
+          <SelectTrigger
+            className="h-12 rounded-full"
+            id="document-filename-format"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -573,7 +460,7 @@ function PdfVerificationDropzone({
 
   return (
     <button
-      className="mt-3 flex h-32 w-full max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--auth-primary)]/80 bg-[var(--auth-muted)] text-center transition hover:bg-[var(--auth-muted)]/70"
+      className="mt-3 flex h-32 w-full max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-input bg-card text-center transition-colors hover:bg-muted"
       onClick={() => inputRef.current?.click()}
       type="button"
     >
@@ -714,8 +601,18 @@ function SignatureMetadata({
           isTimestampSignature
             ? "RFC3161 timestamp"
             : signature.pades_compliant_sub_filter
-              ? "PAdES signature"
+              ? "ETSI.CAdES.detached signature"
               : (signature.signature_type ?? "PDF signature")
+        }
+      />
+      <MetadataLine
+        icon={CalendarDaysIcon}
+        label={
+          signature.signature_timestamp_valid === true
+            ? "Trusted signature timestamp verified"
+            : signature.signature_timestamp_valid === false
+              ? "Signature timestamp validation failed"
+              : "No verified signature timestamp"
         }
       />
       <MetadataLine
@@ -734,7 +631,9 @@ function getTimestampAuthorityLabel(
   signature: VerifyPdfResponse["signatures"][number],
 ): string {
   return (
-    getCertificateSubjectCommonName(signature.certificate_chain.at(0)?.subject) ??
+    getCertificateSubjectCommonName(
+      signature.certificate_chain.at(0)?.subject,
+    ) ??
     signature.signer_name ??
     "timestamp authority"
   );
@@ -767,7 +666,14 @@ function MetadataLine({
 
 function getCertificateChainLabel(verification: VerifyPdfResponse): string {
   if (verification.cryptographic_verification) {
-    return "Signa -> Signa Sub-CA -> Signa Root CA";
+    return (
+      verification.signatures
+        .find((signature) => signature.cms_signature_valid)
+        ?.certificate_chain.map(
+          (certificate) => certificate.subject ?? "Unknown certificate",
+        )
+        .join(" → ") || "Verified document signature"
+    );
   }
 
   return verification.checksum_status === "verified"
@@ -858,106 +764,6 @@ function formatPdfTimezone(timezone: string): string {
   const normalized = timezone.replaceAll("'", "");
 
   return `${normalized.slice(0, 3)}:${normalized.slice(3, 5)}`;
-}
-
-function CertificateUploadButton({
-  onUpload,
-}: {
-  onUpload: (file: File, name: string, password: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <>
-      <Button
-        className="h-12 rounded-full px-6"
-        onClick={() => inputRef.current?.click()}
-        type="button"
-        variant="secondary"
-      >
-        <PlusIcon data-icon="inline-start" />
-        UPLOAD CERT
-      </Button>
-      <input
-        accept=".p12,.pfx"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-
-          if (file) {
-            const password =
-              window.prompt(
-                "Enter the certificate password if this P12/PFX is protected.",
-              ) ?? "";
-
-            onUpload(file, file.name.replace(/\.[^.]+$/, ""), password);
-            event.currentTarget.value = "";
-          }
-        }}
-        ref={inputRef}
-        type="file"
-      />
-    </>
-  );
-}
-
-function CertificateTable({
-  certificates,
-  onMakeDefault,
-  onRemove,
-}: {
-  certificates: SigningCertificate[];
-  onMakeDefault: (name: string) => Promise<void>;
-  onRemove: (name: string) => Promise<void>;
-}) {
-  return (
-    <div className="mt-4 overflow-hidden rounded-t-2xl">
-      <table className="w-full text-left">
-        <thead className="bg-[var(--auth-muted)] text-xs uppercase">
-          <tr>
-            <th className="px-5 py-4">Name</th>
-            <th className="px-5 py-4">Valid to</th>
-            <th className="px-5 py-4">Status</th>
-            <th className="px-5 py-4 text-right" />
-          </tr>
-        </thead>
-        <tbody>
-          {certificates.map((certificate) => (
-            <tr className="border-b" key={certificate.name}>
-              <td className="px-5 py-4">{certificate.name}</td>
-              <td className="px-5 py-4">{certificate.valid_to ?? "-"}</td>
-              <td className="px-5 py-4">
-                {certificate.status === "default" ? (
-                  <span className="rounded-full border px-3 py-1 text-xs font-bold">
-                    Default
-                  </span>
-                ) : (
-                  <button
-                    className="text-xs font-bold underline underline-offset-4"
-                    onClick={() => void onMakeDefault(certificate.name)}
-                    type="button"
-                  >
-                    Make default
-                  </button>
-                )}
-              </td>
-              <td className="px-5 py-4 text-right">
-                {certificate.status !== "default" ? (
-                  <button
-                    className="text-xs font-bold text-destructive underline underline-offset-4"
-                    onClick={() => void onRemove(certificate.name)}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 function PreferenceSwitch({

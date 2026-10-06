@@ -29,7 +29,7 @@ describe('UserHydrationGuard', () => {
 
     await expect(guard.canActivate(createContext(request))).resolves.toBe(true);
 
-    expect(usersService.findActiveUser).toHaveBeenCalledWith('user-1');
+    expect(usersService.findActiveUser).toHaveBeenCalledWith('user-1', 'account-1');
     expect(request.user).toBe(user);
   });
 

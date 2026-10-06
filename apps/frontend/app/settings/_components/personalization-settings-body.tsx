@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useId, useRef, useState } from "react"
-import Image from "next/image"
-import { PlusIcon, Trash2Icon, UploadCloudIcon } from "lucide-react"
+import { useEffect, useId, useState } from "react"
+import { PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -18,19 +17,16 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  type AccountLogo,
   type AccountPreferences,
-  deleteAccountLogo,
-  getAccountLogo,
   getAccountPreferences,
   updateAccountPreferences,
-  uploadAccountLogo,
 } from "@/lib/api/auth"
 import {
   EmailMarkdownEditor,
   type EmailTemplateVariable,
 } from "@/app/templates/[id]/edit/email-markdown-editor"
 import { isEqual } from "@/lib/object-diff"
+import { AccountBrandingSettings } from "./account-branding-settings"
 import { SettingsSidebar } from "./settings-sidebar"
 
 const invitationVariables = [
@@ -63,14 +59,10 @@ export function PersonalizationSettingsBody() {
 
 function PersonalizationPanel() {
   const [preferences, setPreferences] = useState<AccountPreferences | null>(null)
-  const [logo, setLogo] = useState<AccountLogo | null>(null)
 
   useEffect(() => {
-    Promise.all([getAccountPreferences(), getAccountLogo()])
-      .then(([loadedPreferences, loadedLogo]) => {
-        setPreferences(loadedPreferences)
-        setLogo(loadedLogo)
-      })
+    getAccountPreferences()
+      .then(setPreferences)
       .catch((error: unknown) =>
         toast.error("Personalization settings could not be loaded", {
           description: getErrorMessage(error),
@@ -97,47 +89,21 @@ function PersonalizationPanel() {
     }
   }
 
-  async function uploadLogo(file: File) {
-    try {
-      setLogo(await uploadAccountLogo(file))
-      toast.success("Company logo uploaded")
-    } catch (error) {
-      toast.error("Company logo upload failed", {
-        description: getErrorMessage(error),
-      })
-    }
-  }
-
-  async function removeLogo() {
-    try {
-      await deleteAccountLogo()
-      setLogo(null)
-      toast.success("Company logo removed")
-    } catch (error) {
-      toast.error("Company logo remove failed", {
-        description: getErrorMessage(error),
-      })
-    }
-  }
-
   if (!preferences) {
     return <section className="w-full max-w-xl">Loading personalization...</section>
   }
 
   return (
     <section className="w-full max-w-xl">
-      <h1 className="text-4xl font-bold tracking-normal">Email Templates</h1>
+      <h1 className="text-4xl font-bold tracking-normal">Personalization</h1>
+      <AccountBrandingSettings />
+      <h2 className="mt-9 text-3xl font-bold">Email Templates</h2>
       <EmailTemplateAccordion
         preferences={preferences}
         onSave={savePreferences}
       />
 
-      <h2 className="mb-4 mt-9 text-4xl font-bold tracking-normal">
-        Company Logo
-      </h2>
-      <LogoPanel logo={logo} onDelete={removeLogo} onUpload={uploadLogo} />
-
-      <h2 className="mb-4 mt-9 text-4xl font-bold tracking-normal">
+<h2 className="mb-4 mt-9 text-4xl font-bold tracking-normal">
         Submission Form
       </h2>
       <SubmissionFormAccordion
@@ -257,65 +223,6 @@ function EmailTemplateItem({
         </Button>
       </AccordionContent>
     </AccordionItem>
-  )
-}
-
-function LogoPanel({
-  logo,
-  onDelete,
-  onUpload,
-}: {
-  logo: AccountLogo | null
-  onDelete: () => Promise<void>
-  onUpload: (file: File) => Promise<void>
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  return (
-    <div className="rounded-2xl bg-[var(--auth-muted)] p-5">
-      {logo ? (
-        <div className="flex items-center justify-between gap-4">
-          <Image
-            alt="Company logo"
-            className="block h-14 max-w-36 object-contain"
-            height={56}
-            src={logo.url}
-            unoptimized
-            width={140}
-          />
-          <Button
-            onClick={() => void onDelete()}
-            type="button"
-            variant="outline"
-          >
-            <Trash2Icon data-icon="inline-start" />
-            REMOVE
-          </Button>
-        </div>
-      ) : (
-        <button
-          className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[var(--auth-primary)]/70 py-8 text-center"
-          onClick={() => inputRef.current?.click()}
-          type="button"
-        >
-          <UploadCloudIcon className="size-8" />
-          <span className="mt-1 font-bold">Upload Company Logo</span>
-        </button>
-      )}
-      <input
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-
-          if (file) {
-            void onUpload(file)
-          }
-        }}
-        ref={inputRef}
-        type="file"
-      />
-    </div>
   )
 }
 

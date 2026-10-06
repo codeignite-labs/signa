@@ -1,7 +1,10 @@
 "use client";
 
+import { BrandAttribution } from "@/components/branding/brand-attribution";
+import { SigningBrandStyle, signingNavigationUrl } from "@/components/branding/signing-brand-style";
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   DownloadIcon,
@@ -36,7 +39,7 @@ export function CompletedSigningPage({ slug }: { slug: string }) {
     getSigningForm(slug)
       .then((loadedForm) => {
         if (!loadedForm.submitter.completed_at) {
-          router.replace(`/s/${loadedForm.submitter.slug}`);
+          router.replace(signingNavigationUrl(`/s/${loadedForm.submitter.slug}`));
           return;
         }
 
@@ -100,7 +103,7 @@ export function CompletedSigningPage({ slug }: { slug: string }) {
     try {
       const nextForm = await resubmitSigningForm(slug);
 
-      router.replace(`/s/${nextForm.submitter.slug}`);
+      router.replace(signingNavigationUrl(`/s/${nextForm.submitter.slug}`));
     } catch (resubmitError) {
       toast.error("Resubmit failed", {
         description:
@@ -146,14 +149,8 @@ export function CompletedSigningPage({ slug }: { slug: string }) {
     >
       <section className="mx-auto flex w-full max-w-md flex-col items-stretch gap-5">
         <div className="flex justify-center">
-          <Image
-            alt="Signa"
-            className="h-16 w-auto object-contain sm:h-20"
-            height={80}
-            priority
-            src="/images/logo.png"
-            width={144}
-          />
+          <SigningBrandStyle branding={form.branding} />
+          <BrandLogo branding={form.branding ?? null} />
         </div>
 
         <div className="flex items-center gap-4 rounded-xl bg-[var(--auth-muted)] p-4">
@@ -216,13 +213,7 @@ export function CompletedSigningPage({ slug }: { slug: string }) {
           RESUBMIT
         </Button>
 
-        <p className="text-center text-sm text-[var(--auth-foreground)]">
-          Powered by{" "}
-          <span className="font-semibold text-[var(--auth-primary)]">
-            Signa
-          </span>{" "}
-          - open source documents software
-        </p>
+        <BrandAttribution branding={form.branding} />
       </section>
     </main>
   );

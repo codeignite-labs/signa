@@ -194,10 +194,20 @@ export class StorageService {
     recordType: string;
     recordId: string;
     name: string;
+    beforeId?: string;
   }): Promise<void> {
-    const attachments = await this.findRecordAttachments(options);
+    const attachments = await this.findRecordAttachments({
+      recordType: options.recordType,
+      recordId: options.recordId,
+      name: options.name,
+    });
 
-    await this.attachments.remove(attachments);
+    await this.attachments.remove(
+      attachments.filter(
+        (attachment) =>
+          !options.beforeId || BigInt(attachment.id) < BigInt(options.beforeId),
+      ),
+    );
   }
 
   createBlobProxyUrl(
