@@ -81,7 +81,7 @@ export const guideArticles: DocsArticle[] = [
         steps: [
           {
             title: "Upload the source document",
-            body: "Select New template, choose Upload, and add a PDF, DOCX, or HTML file. Wait for the page previews to finish rendering before placing fields.",
+            body: "Select Create, choose Upload, and add a PDF, DOCX, or HTML file. Wait for the page previews to finish rendering before placing fields.",
           },
           {
             title: "Name the signer roles",
@@ -102,8 +102,8 @@ export const guideArticles: DocsArticle[] = [
         title: "Send a test request",
         steps: [
           {
-            title: "Open Send to recipients",
-            body: "From the template detail page, choose Send to recipients and select Email, Phone, Detailed, or Upload list.",
+            title: "Open Add recipients",
+            body: "From the template detail page, choose Add recipients and select via Email, via Phone, Detailed, or Upload List.",
           },
           {
             title: "Map each role",
@@ -169,7 +169,7 @@ export const guideArticles: DocsArticle[] = [
         steps: [
           {
             title: "Create the template",
-            body: "From Templates, select New template, provide a clear business name, and choose the source.",
+            body: "From Templates, select Create, provide a clear business name, and choose the source.",
           },
           {
             title: "Wait for the previews",
@@ -187,7 +187,7 @@ export const guideArticles: DocsArticle[] = [
         id: "manage-template",
         title: "Manage the reusable record",
         paragraphs: [
-          "The template detail page provides Edit, Preview, Send, Sign yourself, Clone, Archive, document replacement, submission export, version history, and activity.",
+          "The template detail page provides Edit, Add recipients, Clone, Archive, submission export, and activity. Open Edit to replace documents, manage fields, or use Sign yourself.",
           "Clone before making a materially different workflow. Replace documents only when existing field positions can be reviewed again.",
         ],
       },
@@ -305,7 +305,7 @@ export const guideArticles: DocsArticle[] = [
         steps: [
           {
             title: "Open the send dialog",
-            body: "Select Send to recipients from the template detail page.",
+            body: "Select Add recipients from the template detail page.",
           },
           {
             title: "Enter recipients",
@@ -549,7 +549,7 @@ export const guideArticles: DocsArticle[] = [
         steps: [
           {
             title: "Choose Upload List",
-            body: "Open Send to recipients and select the upload tab.",
+            body: "Open Add recipients and select Upload List.",
           },
           {
             title: "Select the file",
@@ -1097,7 +1097,7 @@ export const resourceArticles: DocsArticle[] = [
         title: "Validate delivery",
         bullets: [
           "Send a test email from Settings > Integrations.",
-          "Connect Gmail or Microsoft only when account-based sending is required.",
+          "Connect Gmail only when account-based sending is required.",
           "Configure SMS before enabling phone delivery or phone verification.",
           "Set reminders and administrator notification recipients.",
         ],
@@ -1473,7 +1473,7 @@ export const resourceArticles: DocsArticle[] = [
     audience: "Integration administrators",
     category: "Integrations",
     description:
-      "Connect Gmail or Microsoft, enable Google Drive import, and validate SMTP, SMS, and OAuth configuration.",
+      "Connect Gmail, enable Google Drive import, and validate SMTP, SMS, and OAuth configuration.",
     estimatedTime: "15 minutes",
     outcomes: ["A tested provider connection with a known fallback path"],
     prerequisites: ["Administrator access", "Provider credentials or OAuth app"],
@@ -1486,10 +1486,23 @@ export const resourceArticles: DocsArticle[] = [
     ],
     sections: [
       {
+        id: "google-sign-in",
+        title: "Configure Google sign-in",
+        paragraphs: [
+          "Google sign-in and Gmail sending are separate connections. Sign-in uses OpenID Connect to authenticate a user; Gmail sending requires approval to send email from a connected mailbox.",
+        ],
+        steps: [
+          { title: "Create the OAuth client", body: "Create or select a Web application OAuth client in Google Cloud and configure the consent screen for your users." },
+          { title: "Register the callback", body: "Register the exact callback URL: http://localhost:3000/auth/oauth/google/callback for local development, or your HTTPS application origin followed by /auth/oauth/google/callback in production." },
+          { title: "Configure the backend", body: "Set GOOGLE_AUTH_CLIENT_ID, GOOGLE_AUTH_CLIENT_SECRET, and GOOGLE_AUTH_REDIRECT_URI in the backend environment. Keep the client secret on the server and restart the backend after changing configuration." },
+          { title: "Test sign-in", body: "Choose Sign in with Google, complete Google's consent flow, and verify that you return to Templates in the correct workspace. Test an existing login and a new identity according to your registration policy." },
+        ],
+      },
+      {
         id: "email",
         title: "Connect an email provider",
         paragraphs: [
-          "Settings > Integrations supports Gmail and Microsoft account connections when the matching OAuth client and redirect URI are configured on the backend.",
+          "Settings > Integrations supports Gmail account connections when the matching OAuth client and redirect URI are configured on the backend.",
         ],
         bullets: [
           "Confirm the redirect URI exactly matches the provider application.",
@@ -1502,7 +1515,7 @@ export const resourceArticles: DocsArticle[] = [
         id: "drive",
         title: "Enable Google Drive import",
         paragraphs: [
-          "Configure the Google Drive Picker client and API key on the deployment, then test document selection from New template.",
+          "Configure the Google Drive Picker client and API key on the deployment, then test document selection from the Create dialog.",
         ],
       },
       {

@@ -411,12 +411,12 @@ export const legacyResourceArticles: Array<{
   {
     category: "Integrations",
     description:
-      "Connect Gmail, Microsoft, Google Drive Picker, webhooks, S3, mail, SMS, and OAuth.",
+      "Connect Gmail, Google Drive Picker, webhooks, S3, mail, SMS, and OAuth.",
     image: "resource-integrations.png",
     slug: "connect-integrations",
     title: "Connect integrations",
     steps: [
-      "Use Settings > Integrations for Gmail and Microsoft account connections.",
+      "Use Settings > Integrations for Gmail account connections.",
       "Configure Google Drive Picker env vars for template import.",
       "Add webhook URLs under Settings > Webhooks.",
       "Configure S3 and SMTP from deployment env vars.",

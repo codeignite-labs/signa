@@ -455,7 +455,7 @@ sending to arbitrary recipients.
 
 Existing `MAIL_*` variables remain supported as compatibility aliases.
 
-### Google and Microsoft Integrations
+### Google Integrations
 
 Social login OAuth credentials:
 
@@ -464,9 +464,6 @@ Social login OAuth credentials:
 | `GOOGLE_AUTH_CLIENT_ID`        | Optional | Google OAuth client ID for Sign in with Google.                                           |
 | `GOOGLE_AUTH_CLIENT_SECRET`    | Optional | Google OAuth client secret for backend code exchange.                                     |
 | `GOOGLE_AUTH_REDIRECT_URI`     | Optional | Frontend callback URL, for example `http://localhost:3000/auth/oauth/google/callback`.    |
-| `MICROSOFT_AUTH_CLIENT_ID`     | Optional | Microsoft Entra application client ID for Microsoft sign-in.                              |
-| `MICROSOFT_AUTH_CLIENT_SECRET` | Optional | Microsoft Entra client secret for backend code exchange.                                  |
-| `MICROSOFT_AUTH_REDIRECT_URI`  | Optional | Frontend callback URL, for example `http://localhost:3000/auth/oauth/microsoft/callback`. |
 
 Register the exact redirect URLs above with each provider. The backend creates the authorization URL, validates signed `state` and `nonce`, exchanges the code server-side, validates the provider ID token, then returns the normal Signa session.
 
@@ -477,9 +474,6 @@ Server-side OAuth credentials:
 | `GMAIL_OAUTH_CLIENT_ID`         | Optional | Gmail OAuth client ID.           |
 | `GMAIL_OAUTH_CLIENT_SECRET`     | Optional | Gmail OAuth client secret.       |
 | `GMAIL_OAUTH_REDIRECT_URI`      | Optional | Frontend Gmail callback URL.     |
-| `MICROSOFT_OAUTH_CLIENT_ID`     | Optional | Microsoft OAuth client ID.       |
-| `MICROSOFT_OAUTH_CLIENT_SECRET` | Optional | Microsoft OAuth client secret.   |
-| `MICROSOFT_OAUTH_REDIRECT_URI`  | Optional | Frontend Microsoft callback URL. |
 
 Google Drive Picker frontend build-time credentials:
 

@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/docs/docs-code-block";
 import { DocsFooter } from "@/components/docs/docs-footer";
 import { DocsImage } from "@/components/docs/docs-image";
+import { DocsScreenshot } from "@/components/docs/docs-screenshot";
+import { articleScreenshots, docsScreenshots } from "@/lib/docs/screenshots";
 import { DocsMobileNav } from "@/components/docs/docs-mobile-nav";
 import { docsNavGroups } from "@/components/docs/docs-nav-links";
 import { DocsSearch } from "@/components/docs/docs-search";
@@ -281,10 +283,10 @@ function DocsArticleBody({ article }: { article: DocsArticle }) {
   return (
     <DocsContainer className="py-14 sm:py-16">
       <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-16">
-        <article className="min-w-0">
+        <article className="min-w-0 [overflow-wrap:anywhere]">
           <ArticleHeader article={article} />
           <ArticlePreparation article={article} />
-          <ArticleSections sections={article.sections} />
+          <ArticleSections sections={article.sections} screenshotMap={articleScreenshots[article.slug]} />
           <RelatedArticles links={article.related} />
         </article>
         <ArticleTableOfContents article={article} />
@@ -357,7 +359,7 @@ function ArticleChecklist({
   );
 }
 
-function ArticleSections({ sections }: { sections: DocsArticle["sections"] }) {
+function ArticleSections({ sections, screenshotMap }: { sections: DocsArticle["sections"]; screenshotMap?: Record<string, keyof typeof docsScreenshots> }) {
   return (
     <div className="mt-12 space-y-14">
       {sections.map((section) => (
@@ -373,6 +375,7 @@ function ArticleSections({ sections }: { sections: DocsArticle["sections"] }) {
           ))}
           {section.bullets ? <ArticleBullets items={section.bullets} /> : null}
           {section.steps ? <ArticleProcedure steps={section.steps} /> : null}
+          {screenshotMap?.[section.id] && <DocsScreenshot image={docsScreenshots[screenshotMap[section.id]]} />}
           {section.code ? (
             <div className="mt-7">
               <CodeBlock
