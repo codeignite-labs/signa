@@ -1,5 +1,6 @@
 "use client";
 
+import { useAccountBranding } from "@/components/branding/account-branding-provider";
 import Link from "next/link";
 import { ArrowLeftIcon, BotIcon, CircleHelpIcon, InfoIcon } from "lucide-react";
 
@@ -46,6 +47,7 @@ type SettingsSection =
 export function SettingsSidebar({ active }: { active: SettingsSection }) {
   const { isPending, isTestMode, setTestMode } = useTestMode();
   const { dictionary } = useAppI18n();
+  const branding = useAccountBranding();
 
   return (
     <aside className="w-full shrink-0 md:w-52">
@@ -113,7 +115,7 @@ export function SettingsSidebar({ active }: { active: SettingsSection }) {
           />
         </label>
       </nav>
-      <div className="mx-4 mt-4 hidden border-t border-border pt-3 text-sm md:block">
+      {branding !== undefined && !branding?.white_label && <div className="mx-4 mt-4 hidden border-t border-border pt-3 text-sm md:block">
         <p>{dictionary.settings.help}</p>
         <div className="mt-4 flex gap-3">
           <span className="flex size-10 items-center justify-center rounded-full bg-[var(--auth-muted)]">
@@ -132,7 +134,7 @@ export function SettingsSidebar({ active }: { active: SettingsSection }) {
         >
           support@signa.local
         </a>
-      </div>
+      </div>}
     </aside>
   );
 }

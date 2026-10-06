@@ -53,6 +53,7 @@ describe('SigningService', () => {
       { get: jest.fn() } as never,
       {} as never,
       {} as never,
+      { get: jest.fn() } as never,
     );
 
     await expect(

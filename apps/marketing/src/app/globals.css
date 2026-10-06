@@ -395,3 +395,24 @@ button {
   outline: 3px solid var(--color-mint);
   outline-offset: 3px;
 }
+
+.docs-lightbox {
+  --yarl__color_backdrop: var(--background);
+  --yarl__color_button: var(--foreground);
+  --yarl__color_button_active: var(--primary);
+  --yarl__color_button_disabled: var(--muted-foreground);
+  --yarl__button_filter: none;
+}
+
+.docs-lightbox .yarl__button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-lightbox * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

@@ -1,3 +1,4 @@
+import { BrandingModule } from '../branding/branding.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountConfig } from '../accounts/entities/account-config.entity';
@@ -18,6 +19,7 @@ import { SubmitterTrackingController } from './submitter-tracking.controller';
 
 @Module({
   imports: [
+    BrandingModule,
     StorageModule,
     MailModule,
     SubmissionsModule,

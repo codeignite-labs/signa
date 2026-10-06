@@ -189,9 +189,9 @@ export class ToolsService {
       signature.signatureType === padesSubFilter
         ? 'pades_subfilter: signature uses ETSI.CAdES.detached'
         : 'legacy_subfilter: signature does not use ETSI.CAdES.detached',
-      signature.isTimestampSignature
-        ? 'timestamp_signature: PDF contains an embedded RFC3161 document timestamp signature'
-        : 'timestamp_signature_missing: PDF does not contain an embedded RFC3161 document timestamp signature',
+      ...(signature.isTimestampSignature
+        ? ['timestamp_signature: PDF contains an RFC3161 document timestamp']
+        : []),
       ...cmsVerification.messages,
       signature.hasDss
         ? 'dss_present: PDF contains a DSS dictionary for long-term validation evidence'
@@ -221,6 +221,7 @@ export class ToolsService {
       signing_time: normalizeSignatureTime(signature.signingTime),
       signature_type: signature.signatureType,
       timestamp_signature: signature.isTimestampSignature,
+      signature_timestamp_valid: cmsVerification.timestampValid,
       trust_anchor: cmsVerification.trustAnchor,
       trust_anchor_fingerprint: cmsVerification.trustAnchorFingerprint,
     };

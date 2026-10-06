@@ -1,4 +1,6 @@
+import { BrandingModule } from '../branding/branding.module';
 import { Module } from '@nestjs/common';
+import { AccountMembershipsModule } from '../account-memberships/account-memberships.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { AccountHydrationGuard } from '../auth/guards/account-hydration/account-hydration.guard';
@@ -14,9 +16,13 @@ import { AccountLinkedAccount } from './entities/account-linked-account.entity';
 import { Account } from './entities/account.entity';
 import { EncryptedConfig } from './entities/encrypted-config.entity';
 import { TestingAccountsController } from './testing-accounts.controller';
+import { BrandingController } from './branding.controller';
+import { AccountMembershipsController } from './account-memberships.controller';
 
 @Module({
   imports: [
+    AccountMembershipsModule,
+    BrandingModule,
     AuthModule,
     MailModule,
     PdfSignaturesModule,
@@ -35,6 +41,8 @@ import { TestingAccountsController } from './testing-accounts.controller';
     AccountsController,
     AccountCustomFieldsController,
     TestingAccountsController,
+    BrandingController,
+    AccountMembershipsController,
   ],
 })
 export class AccountsModule {}

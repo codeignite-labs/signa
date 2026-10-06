@@ -104,6 +104,14 @@ export class VerifyPdfSignatureDto {
   timestamp_signature!: boolean;
 
   @ApiProperty({
+    type: Boolean,
+    nullable: true,
+    description:
+      'Cryptographic validation of the CMS signature timestamp against configured TSA trust anchors; null means absent',
+  })
+  signature_timestamp_valid!: boolean | null;
+
+  @ApiProperty({
     description:
       'Certificate-chain classification from the CMS signature contents.',
     enum: ['trusted', 'external', 'expired', 'invalid', 'missing'],

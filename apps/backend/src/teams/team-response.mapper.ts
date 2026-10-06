@@ -22,6 +22,7 @@ export function toTeamResponse(team: Team): TeamResponseDto {
 
 export function toMemberResponse(member: TeamMember): TeamMemberResponseDto {
   return {
+    account_id: String(member.accountId),
     id: String(member.id),
     team_id: String(member.teamId),
     user_id: String(member.userId),

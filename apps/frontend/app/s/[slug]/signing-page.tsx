@@ -1,9 +1,12 @@
 "use client";
 
+import { BrandAttribution } from "@/components/branding/brand-attribution";
+import { SigningBrandStyle, signingNavigationUrl } from "@/components/branding/signing-brand-style";
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import confetti from "canvas-confetti";
+
 import {
   CheckCircle2Icon,
   DownloadIcon,
@@ -42,7 +45,10 @@ import {
   uploadSigningAttachment,
 } from "@/lib/api/signing";
 import { cn } from "@/lib/utils";
-import { SignaturePanel } from "./signature-panel";
+import dynamic from "next/dynamic";
+
+const loadSignaturePanel = () => import("./signature-panel");
+const SignaturePanel = dynamic(() => loadSignaturePanel().then((module) => module.SignaturePanel));
 
 type ActivePanelState = {
   field: SigningField;
@@ -83,11 +89,12 @@ export function SigningPage({
   });
 
   useEffect(() => {
+    void loadSignaturePanel();
     getSigningForm(slug, trackingParam)
       .then((loadedForm) => {
         if (loadedForm.submitter.completed_at) {
           setIsRedirectingCompletedForm(true);
-          router.replace(`/s/${loadedForm.submitter.slug}/completed`);
+          router.replace(signingNavigationUrl(`/s/${loadedForm.submitter.slug}/completed`));
           return;
         }
 
@@ -267,14 +274,8 @@ export function SigningPage({
       <div className="mx-auto flex w-full max-w-[1000px] flex-col px-3 py-3 sm:px-6 sm:py-4">
         <header className="mx-auto flex w-full max-w-[920px] flex-col gap-3 pb-1 sm:gap-4 sm:pb-2">
           <div className="flex justify-center">
-            <Image
-              alt="Signa"
-              className="h-14 w-auto object-contain sm:h-[72px]"
-              height={72}
-              priority
-              src="/images/logo.png"
-              width={124}
-            />
+            <SigningBrandStyle branding={form.branding} />
+            <BrandLogo branding={form.branding ?? null} />
           </div>
         </header>
 
@@ -333,7 +334,7 @@ export function SigningPage({
                 : "pb-64 sm:pb-36",
           )}
         >
-          {form.documents.map((document) =>
+          {form.documents.map((document, documentIndex) =>
             document.preview_images.map((previewImage, pageIndex) => (
               <DocumentPage
                 activeFieldUuid={
@@ -348,17 +349,12 @@ export function SigningPage({
                   setActivePanel({ field, mode: "field" })
                 }
                 pageIndex={pageIndex}
+                priority={documentIndex === 0 && pageIndex === 0}
                 previewImage={previewImage}
               />
             )),
           )}
-          <p className="pt-2 text-center text-sm text-[var(--auth-muted-foreground)]">
-            Powered by{" "}
-            <span className="font-semibold text-[var(--auth-primary)]">
-              Signa
-            </span>{" "}
-            - open source documents software
-          </p>
+          <BrandAttribution branding={form.branding} />
         </section>
       </div>
 
@@ -469,13 +465,7 @@ function CompletedSigningPanel({
             DOWNLOAD
           </Button>
         </div>
-        <p className="mt-4 text-center text-sm text-[var(--auth-foreground)]">
-          Powered by{" "}
-          <span className="font-semibold text-[var(--auth-primary)]">
-            Signa
-          </span>{" "}
-          - open source documents software
-        </p>
+        <BrandAttribution branding={form.branding} />
         <SigningProgressDots isComplete total={getSigningStepCount(form)} />
       </section>
     </div>
@@ -531,11 +521,11 @@ function showCompletionConfetti(isEnabled: boolean) {
     return;
   }
 
-  void confetti({
+  void import("canvas-confetti").then(({ default: confetti }) => confetti({
     particleCount: 140,
     spread: 70,
     origin: { y: 0.7 },
-  });
+  }));
 }
 
 function DocumentPage({
@@ -546,6 +536,7 @@ function DocumentPage({
   isReadOnly,
   onSelectField,
   pageIndex,
+  priority,
   previewImage,
 }: {
   activeFieldUuid: string | null;
@@ -555,6 +546,7 @@ function DocumentPage({
   isReadOnly: boolean;
   onSelectField: (field: SigningField) => void;
   pageIndex: number;
+  priority: boolean;
   previewImage: {
     id: string;
     metadata?: { height?: number; width?: number } | null;
@@ -573,14 +565,16 @@ function DocumentPage({
   return (
     <div
       className="relative w-full max-w-[920px] overflow-hidden rounded border border-[var(--auth-input-border)] bg-white shadow-sm"
-      style={{ aspectRatio: `${width} / ${height}` }}
+      style={{ aspectRatio: `${width} / ${height}`, containerType: "inline-size" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         alt={`${form.title} page ${pageIndex + 1}`}
         className="h-full w-full object-contain"
         height={height}
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
+        decoding="async"
         src={previewImage.url}
         width={width}
       />
@@ -624,7 +618,7 @@ function SigningFieldOverlay({
   isReadOnly: boolean;
   onSelectField: (field: SigningField) => void;
 }) {
-  const content = <FieldDisplayValue area={area} field={field} form={form} />;
+  const content = <span className="flex h-full w-full items-center justify-center overflow-hidden" style={{ fontSize: "clamp(5px, 1.52cqw, 14px)", lineHeight: 1 }}><FieldDisplayValue area={area} field={field} form={form} /></span>;
   const label = field.name || field.title || getDefaultFieldTitle(field);
   const hasValue = hasAreaValue(form, field, area);
   const isOptionArea = isNativeChoiceArea(field, area);
@@ -727,7 +721,7 @@ function FieldDisplayValue({
     }
 
     return (
-      <span className="text-sm font-bold">
+      <span className="text-[length:inherit] font-bold">
         {isBlankValue(value) ? "Sign Here" : "Signed"}
       </span>
     );
@@ -760,7 +754,7 @@ function FieldDisplayValue({
     }
 
     return (
-      <span className="truncate text-sm font-semibold">
+      <span className="truncate text-[length:inherit] font-semibold">
         {isBlankValue(value)
           ? field.name || field.title || "Upload"
           : "Uploaded"}
@@ -769,7 +763,7 @@ function FieldDisplayValue({
   }
 
   return (
-    <span className="flex w-full items-center truncate px-0.5 text-sm font-semibold">
+    <span className="flex w-full items-center truncate px-0.5 text-[length:inherit] font-semibold">
       {isBlankValue(value)
         ? field.name || field.title || "Field"
         : String(value)}
@@ -809,7 +803,7 @@ function ChoiceFieldDisplay({
     .map((option) => option.value);
 
   return (
-    <span className="truncate text-sm font-semibold">
+    <span className="truncate text-[length:inherit] font-semibold">
       {selectedLabels.length
         ? selectedLabels.join(", ")
         : field.name || field.title || "Select"}
@@ -827,7 +821,7 @@ function ChoiceMark({
   return (
     <span
       className={cn(
-        "flex aspect-square h-[min(100%,1.75rem)] max-h-7 min-h-4 items-center justify-center border bg-white text-sm font-bold leading-none text-[var(--auth-primary)]",
+        "flex aspect-square h-[min(100%,1.75rem)] max-h-7 items-center justify-center border bg-white text-[length:inherit] font-bold leading-none text-[var(--auth-primary)]",
         shape === "circle" ? "rounded-full" : "rounded-[4px]",
         isSelected
           ? "border-[var(--auth-primary)] bg-[var(--auth-primary)] text-[var(--auth-primary-foreground)]"

@@ -1,11 +1,19 @@
 import {
+  activateSigningCertificate,
+  insertSigningCertificate,
+  mutateSigningCertificates,
+  removeSigningCertificate,
+} from '../pdf-signatures/signing-certificate-registry';
+import { decryptSigningKey } from '../pdf-signatures/signing-key-envelope';
+import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { normalizeAccountLogo } from '../branding/normalize-account-logo';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Like, Repository } from 'typeorm';
 import { randomBytes } from 'node:crypto';
 import { throwDatabaseErrors, throwIfNotFound } from '../common/utils/error';
 import { MailService } from '../mail/mail.service';
@@ -50,7 +58,7 @@ import { AccountLinkedAccount } from './entities/account-linked-account.entity';
 import { Account } from './entities/account.entity';
 import { EncryptedConfig } from './entities/encrypted-config.entity';
 
-const emailIntegrationProviders = ['gmail', 'microsoft'] as const;
+const emailIntegrationProviders = ['gmail'] as const;
 const templateCustomFieldsKey = 'template_custom_fields';
 
 type EmailIntegrationProvider = (typeof emailIntegrationProviders)[number];
@@ -491,12 +499,13 @@ export class AccountsService {
   ): Promise<AccountLogoResponseDto | null> {
     await this.findActiveAccountOrFail(accountId);
 
-    const [logo] = await this.storageService.findRecordAttachments({
+    const logos = await this.storageService.findRecordAttachments({
       recordType: 'Account',
       recordId: accountId,
       name: 'logo',
     });
 
+    const logo = logos.at(-1);
     return logo ? this.toLogoResponse(logo) : null;
   }
 
@@ -507,26 +516,26 @@ export class AccountsService {
     await this.findActiveAccountOrFail(accountId);
     this.assertUploadedFile(file, 'Logo file is required');
 
-    if (!file.mimetype?.startsWith('image/')) {
-      throw new UnprocessableEntityException({
-        error: 'Logo must be an image file',
-      });
-    }
-
+    const normalized = await normalizeAccountLogo(file.buffer);
+    const logo = await this.storageService.createAttachment({
+      buffer: normalized.buffer,
+      filename: 'account-logo.png',
+      contentType: 'image/png',
+      name: 'logo',
+      recordType: 'Account',
+      recordId: accountId,
+      metadata: {
+        analyzed: true,
+        identified: true,
+        logo_background: normalized.background,
+      },
+    });
+    // Publish the replacement before removing older attachments; a failed upload preserves the logo.
     await this.storageService.deleteRecordAttachments({
       recordType: 'Account',
       recordId: accountId,
       name: 'logo',
-    });
-
-    const logo = await this.storageService.createAttachment({
-      buffer: file.buffer,
-      filename: file.originalname || 'logo.png',
-      contentType: file.mimetype,
-      name: 'logo',
-      recordType: 'Account',
-      recordId: accountId,
-      metadata: { analyzed: true, identified: true },
+      beforeId: logo.id,
     });
 
     return this.toLogoResponse(logo);
@@ -554,7 +563,7 @@ export class AccountsService {
 
     const [configs, defaultConfig, timestampServerUrl] = await Promise.all([
       this.encryptedConfigs.find({
-        where: { accountId },
+        where: { accountId, key: Like(`${signingCertificatePrefix}%`) },
         order: { createdAt: 'ASC' },
       }),
       this.encryptedConfigs.findOne({
@@ -593,22 +602,16 @@ export class AccountsService {
         password,
       }),
     );
-    const config = await this.upsertEncryptedConfig(
+    const config = await mutateSigningCertificates(
+      this.dataSource,
       accountId,
-      `${signingCertificatePrefix}${certificateName}`,
-      value,
+      (repo) =>
+        insertSigningCertificate(repo, {
+          accountId,
+          name: certificateName,
+          value,
+        }),
     );
-    const certificates = await this.listSigningCertificates(accountId);
-
-    if (certificates.data.length === 1) {
-      await this.upsertEncryptedConfig(
-        accountId,
-        defaultSigningCertificateKey,
-        certificateName,
-      );
-      return { ...this.toSigningCertificateResponse(config, certificateName) };
-    }
-
     return this.toSigningCertificateResponse(config, null);
   }
 
@@ -616,17 +619,26 @@ export class AccountsService {
     accountId: string,
     name: string,
   ): Promise<SigningCertificateResponseDto> {
-    await this.findSigningCertificateOrFail(accountId, name);
-    await this.upsertEncryptedConfig(
+    const normalized = this.normalizeCertificateName(name);
+    const certificate = await mutateSigningCertificates(
+      this.dataSource,
       accountId,
-      defaultSigningCertificateKey,
-      this.normalizeCertificateName(name),
+      async (repo) => {
+        const selected = await repo.findOne({
+          where: { accountId, key: `${signingCertificatePrefix}${normalized}` },
+        });
+        if (!selected)
+          throw new NotFoundException('Signing certificate not found');
+        const identity = parseStoredSigningCertificate(
+          decryptSigningKey(selected.value, accountId),
+        );
+        if (!identity)
+          throw new UnprocessableEntityException('Invalid signing identity');
+        await this.pdfSignatureService.assertSigningPolicy(identity, accountId);
+        return activateSigningCertificate(repo, accountId, normalized);
+      },
     );
-
-    return this.toSigningCertificateResponse(
-      await this.findSigningCertificateOrFail(accountId, name),
-      this.normalizeCertificateName(name),
-    );
+    return this.toSigningCertificateResponse(certificate, normalized);
   }
 
   async updateTimestampServerUrl(
@@ -643,21 +655,17 @@ export class AccountsService {
     accountId: string,
     name: string,
   ): Promise<SigningCertificateResponseDto> {
-    const certificate = await this.findSigningCertificateOrFail(
+    const certificate = await mutateSigningCertificates(
+      this.dataSource,
       accountId,
-      name,
+      (repo) =>
+        removeSigningCertificate(
+          repo,
+          accountId,
+          this.normalizeCertificateName(name),
+        ),
     );
-    const response = this.toSigningCertificateResponse(certificate, null);
-    const defaultConfig = await this.encryptedConfigs.findOne({
-      where: { accountId, key: defaultSigningCertificateKey },
-    });
-
-    if (defaultConfig?.value === response.name) {
-      await this.encryptedConfigs.remove(defaultConfig);
-    }
-
-    await this.encryptedConfigs.remove(certificate);
-    return response;
+    return this.toSigningCertificateResponse(certificate, null);
   }
 
   async listSigningTrustRoots(
@@ -880,21 +888,7 @@ export class AccountsService {
       };
     }
 
-    return {
-      authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-      clientId: this.configService.get<string>('MICROSOFT_OAUTH_CLIENT_ID', ''),
-      clientSecret: this.configService.get<string>(
-        'MICROSOFT_OAUTH_CLIENT_SECRET',
-        '',
-      ),
-      redirectUri: this.configService.get<string>(
-        'MICROSOFT_OAUTH_REDIRECT_URI',
-        '',
-      ),
-      scopes: ['openid', 'email', 'profile', 'offline_access', 'Mail.Send'],
-      tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-      userInfoUrl: 'https://graph.microsoft.com/oidc/userinfo',
-    };
+    throw new NotFoundException({ error: 'Email integration not found' });
   }
 
   private buildEmailIntegrationOauthUrl(
@@ -929,7 +923,7 @@ export class AccountsService {
 
     return {
       provider,
-      name: provider === 'gmail' ? 'Gmail' : 'Microsoft',
+      name: 'Gmail',
       connected: Boolean(config),
       configured: Boolean(
         settings.clientId && settings.clientSecret && settings.redirectUri,
@@ -1190,7 +1184,7 @@ export class AccountsService {
       uuid: logo.uuid,
       filename: logo.blob.filename,
       content_type: logo.blob.contentType,
-      url: this.storageService.createBlobProxyUrl(logo.blob),
+      url: this.storageService.createBlobProxyUrl(logo.blob, null),
     };
   }
 
@@ -1199,10 +1193,14 @@ export class AccountsService {
     defaultName: string | null,
   ): SigningCertificateResponseDto {
     const name = config.key.replace(signingCertificatePrefix, '');
-    const metadata = parseStoredSigningCertificate(config.value);
+    const metadata = parseStoredSigningCertificate(
+      decryptSigningKey(config.value, config.accountId),
+    );
 
     return {
       name,
+      is_active: defaultName === name,
+      fingerprint_sha256: metadata?.fingerprint_sha256 ?? null,
       filename: metadata?.filename,
       issuer: metadata?.issuer ?? null,
       serial_number: metadata?.serial_number ?? null,
@@ -1214,11 +1212,21 @@ export class AccountsService {
   }
 
   private normalizeCertificateName(name: string | undefined): string {
-    const normalized = (name || '').trim().replace(/\.[a-z0-9]+$/i, '');
+    const normalized = (typeof name === 'string' ? name : '')
+      .trim()
+      .replace(/\.(p12|pfx)$/i, '');
 
-    if (!normalized) {
+    if (
+      !normalized ||
+      normalized.length > 200 ||
+      [...normalized].some(
+        (character) =>
+          character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+      )
+    ) {
       throw new UnprocessableEntityException({
-        error: 'Signing certificate name is required',
+        error:
+          'Signing certificate name must contain 1–200 printable characters',
       });
     }
 

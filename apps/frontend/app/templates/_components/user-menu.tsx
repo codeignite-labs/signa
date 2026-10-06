@@ -60,6 +60,7 @@ export function UserMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{dictionary.userMenu.workspace}</DropdownMenuLabel>
         <DropdownMenuGroup>
+          <DropdownMenuItem asChild><Link href="/settings/accounts">Switch account / Invitations</Link></DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/settings/profile">
               <UserRoundIcon data-icon="inline-start" />

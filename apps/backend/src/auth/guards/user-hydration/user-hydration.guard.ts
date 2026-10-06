@@ -13,13 +13,14 @@ export class UserHydrationGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (request.user) return true;
     const userId = request.session?.userId ?? request.tenant?.userId;
 
     if (!userId) {
       throw new UnauthorizedException({ error: 'Not authenticated' });
     }
 
-    const user = await this.usersService.findActiveUser(userId);
+    const user = await this.usersService.findActiveUser(userId, request.tenant?.accountId ?? request.session?.accountId);
 
     if (!user) {
       throw new UnauthorizedException({ error: 'Not authenticated' });

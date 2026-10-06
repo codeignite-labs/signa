@@ -1,7 +1,8 @@
 "use client";
 
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -149,23 +150,22 @@ export function TemplateEditor() {
           onRemove={() => void resolvePendingImportedFields("remove")}
         />
       ) : null}
-      <header className="relative flex h-16 shrink-0 items-center justify-between border-b border-[var(--auth-input-border)] bg-card px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            aria-label="Back to templates"
-            className="group relative flex size-12 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[var(--auth-muted)]"
-            href="/templates"
-          >
-            <Image
-              alt="Signa"
-              className="object-contain transition-opacity duration-150 group-hover:opacity-0"
-              fill
-              priority
-              sizes="48px"
-              src="/images/logo.png"
-            />
-            <ArrowLeftIcon className="absolute size-6 text-[var(--auth-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
-          </Link>
+      <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-3 py-2 sm:px-4 lg:flex-nowrap">
+        <div className="flex min-w-0 basis-full items-center gap-3 lg:flex-1 lg:basis-auto">
+          <Button asChild variant="ghost" size="icon" className="size-10">
+            <Link
+              aria-label="Back to templates"
+              title="Back to templates"
+              href="/templates"
+            >
+              <ArrowLeftIcon className="size-5" />
+            </Link>
+          </Button>
+          <BrandLogo className="hidden max-w-40 shrink-0 lg:inline-flex xl:max-w-56" />
+          <span
+            aria-hidden="true"
+            className="hidden h-8 w-px shrink-0 bg-border lg:block"
+          />
           <TemplateTitleInlineEditor
             name={currentTemplate.name}
             onRename={renameTemplate}
@@ -180,9 +180,12 @@ export function TemplateEditor() {
           onUndo={undoTemplateChange}
         />
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <Button
-            className="h-12 rounded-full px-5 font-bold text-[var(--auth-primary)]"
+            aria-label={
+              isOpeningSelfSign ? "Opening signing form" : "Sign yourself"
+            }
+            className="size-10 rounded-full p-0 font-bold text-[var(--auth-primary)] sm:h-12 sm:w-auto sm:px-5"
             disabled={isOpeningSelfSign}
             onClick={() => void openSelfSigningForm()}
             type="button"
@@ -191,38 +194,38 @@ export function TemplateEditor() {
             {isOpeningSelfSign ? (
               <Spinner className="size-4" />
             ) : (
-              <PenLineIcon data-icon="inline-start" />
+              <PenLineIcon />
             )}
-            {isOpeningSelfSign ? "OPENING" : "SIGN YOURSELF"}
+            <span className="hidden sm:inline">
+              {isOpeningSelfSign ? "OPENING" : "SIGN YOURSELF"}
+            </span>
           </Button>
           <Button
-            className="h-12 rounded-full border-[var(--auth-primary)] px-6 font-bold text-[var(--auth-primary)] hover:bg-[var(--auth-primary)] hover:text-[var(--auth-primary-foreground)]"
+            aria-label="Send"
+            className="size-10 rounded-full p-0 font-bold sm:h-12 sm:w-auto sm:px-6"
             onClick={openRecipientsDialog}
             type="button"
             variant="outline"
           >
-            <UserRoundPlusIcon data-icon="inline-start" />
-            SEND
+            <UserRoundPlusIcon />
+            <span className="hidden sm:inline">SEND</span>
           </Button>
           <div className="flex overflow-hidden rounded-full bg-[var(--auth-primary)] text-[var(--auth-primary-foreground)]">
             <Button
-              className="h-12 rounded-none bg-transparent pl-5 pr-6 font-bold text-inherit hover:bg-[var(--auth-primary-hover)]"
+              aria-label="Save template"
+              className="size-10 rounded-none bg-transparent p-0 sm:h-12 sm:w-auto sm:pl-5 sm:pr-6 font-bold text-inherit hover:bg-[var(--auth-primary-hover)]"
               disabled={isSavingFields}
               onClick={() => void saveTemplateDraft()}
               type="button"
             >
-              {isSavingFields ? (
-                <Spinner className="size-4" />
-              ) : (
-                <SaveIcon data-icon="inline-start" />
-              )}
-              SAVE
+              {isSavingFields ? <Spinner className="size-4" /> : <SaveIcon />}
+              <span className="hidden sm:inline">SAVE</span>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label="Save options"
-                  className="h-12 rounded-none border-l border-white/20 bg-transparent text-inherit hover:bg-[var(--auth-primary-hover)]"
+                  className="h-10 rounded-none border-l border-white/20 sm:h-12 bg-transparent text-inherit hover:bg-[var(--auth-primary-hover)]"
                   size="icon"
                   type="button"
                 >
@@ -448,7 +451,9 @@ function TemplateTitleInlineEditor({
       onClick={startEditing}
       type="button"
     >
-      <span className="truncate text-3xl font-bold tracking-normal">{name}</span>
+      <span className="truncate text-xl font-bold tracking-normal sm:text-3xl">
+        {name}
+      </span>
       <PencilIcon className="size-5 shrink-0 text-[var(--auth-primary)] opacity-0 transition-opacity group-hover/title:opacity-100" />
       {isSaving ? <Spinner className="size-4 shrink-0" /> : null}
     </button>
@@ -470,7 +475,7 @@ function TemplateEditorHistoryControls({
 }) {
   return (
     <TooltipProvider>
-      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center overflow-hidden rounded-full border border-[var(--auth-input-border)] bg-[var(--auth-background)] shadow-sm">
+      <div className="flex shrink-0 items-center overflow-hidden rounded-full border border-[var(--auth-input-border)] bg-[var(--auth-background)] shadow-sm">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -517,7 +522,11 @@ function TemplateEditorStatus({
 }) {
   if (error) {
     return (
-      <main className="flex min-h-svh items-center justify-center bg-[var(--auth-background)] px-6 text-[var(--auth-foreground)]" id="main-content" tabIndex={-1}>
+      <main
+        className="flex min-h-svh items-center justify-center bg-[var(--auth-background)] px-6 text-[var(--auth-foreground)]"
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className="flex max-w-md flex-col items-center gap-4 text-center">
           <p className="text-lg font-semibold">{error}</p>
           <Button
@@ -534,7 +543,11 @@ function TemplateEditorStatus({
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-[var(--auth-background)] text-[var(--auth-foreground)]" id="main-content" tabIndex={-1}>
+    <main
+      className="flex min-h-svh items-center justify-center bg-[var(--auth-background)] text-[var(--auth-foreground)]"
+      id="main-content"
+      tabIndex={-1}
+    >
       <div className="flex items-center gap-3 text-sm font-semibold">
         <Spinner />
         Loading template editor

@@ -72,6 +72,8 @@
   --auth-muted: #eef5fa;
   --auth-upgrade: #9abeda;
   --auth-upgrade-hover: #6e97b9;
+  --primary-hover: var(--auth-primary-hover);
+  --auth-muted-foreground: var(--muted-foreground);
   --auth-label: #53728f;
   --auth-input-border: #afd1e9;
   --status-success: #9be3c8;
@@ -121,6 +123,8 @@
   --auth-muted: #102540;
   --auth-upgrade: #27639d;
   --auth-upgrade-hover: #6e97b9;
+  --primary-hover: var(--auth-primary-hover);
+  --auth-muted-foreground: var(--muted-foreground);
   --auth-label: #9abeda;
   --auth-input-border: #274a6d;
   --status-success: #27639d;
@@ -156,6 +160,10 @@
   --sidebar-accent-foreground: #eef5fa;
   --sidebar-border: #274a6d;
   --sidebar-ring: #9abeda;
+}
+
+.dark img[data-platform-logo] {
+  filter: brightness(0) invert(1);
 }
 
 @layer base {

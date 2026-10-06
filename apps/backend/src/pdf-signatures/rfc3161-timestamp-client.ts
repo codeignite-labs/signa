@@ -1,3 +1,10 @@
+import { fetchPki } from './pki-http';
+import { parsePemCertificates } from './certificate-validation-path';
+import { Certificate } from 'pkijs';
+import {
+  parseTimestampResponse,
+  validateTimestampToken,
+} from './timestamp-validation';
 import {
   Injectable,
   Logger,
@@ -6,7 +13,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import forge from 'node-forge';
-import type * as Forge from 'node-forge';
 
 export type TimestampServerAttempt = {
   error?: string;
@@ -49,14 +55,17 @@ export class Rfc3161TimestampClient {
     const attempts: TimestampServerAttempt[] = [];
 
     for (const serverUrl of input.serverUrls) {
-      const attempt = await this.requestFromOneServer(serverUrl, input.digest);
-      attempts.push(attempt);
+      const { token, ...attempt } = await this.requestFromOneServer(
+        serverUrl,
+        input.digest,
+      );
+      attempts.push({ ...attempt, url: timestampEndpointLabel(serverUrl) });
 
-      if (attempt.status === 'success' && hasTimestampToken(attempt)) {
+      if (attempt.status === 'success' && token) {
         return {
           attempts,
-          token: attempt.token,
-          url: serverUrl,
+          token,
+          url: timestampEndpointLabel(serverUrl),
         };
       }
     }
@@ -69,7 +78,9 @@ export class Rfc3161TimestampClient {
     digest: Buffer,
   ): Promise<TimestampServerAttempt & { token?: Buffer }> {
     try {
-      const response = await this.postTimestampRequest(serverUrl, digest);
+      const request = buildTimestampRequest(digest);
+      const earliestTime = new Date();
+      const response = await this.postTimestampRequest(serverUrl, request);
       const responseBody = Buffer.from(await response.arrayBuffer());
 
       if (!response.ok || responseBody.length === 0) {
@@ -80,9 +91,16 @@ export class Rfc3161TimestampClient {
         };
       }
 
+      const { token } = parseTimestampResponse(responseBody, request);
+      await validateTimestampToken({
+        token,
+        digest,
+        trustedCertificates: this.trustedCertificates(),
+        earliestTime,
+      });
       return {
         status: 'success',
-        token: parseGrantedTimestampToken(responseBody),
+        token,
         url: serverUrl,
       };
     } catch (error) {
@@ -94,7 +112,7 @@ export class Rfc3161TimestampClient {
     }
   }
 
-  private postTimestampRequest(serverUrl: string, digest: Buffer) {
+  private postTimestampRequest(serverUrl: string, request: Buffer) {
     const url = new URL(serverUrl);
     const headers: Record<string, string> = {
       'content-type': 'application/timestamp-query',
@@ -108,11 +126,12 @@ export class Rfc3161TimestampClient {
       url.password = '';
     }
 
-    return fetch(url, {
-      body: new Uint8Array(buildTimestampRequest(digest)),
+    return fetchPki(url, {
+      body: new Uint8Array(request),
       headers,
       method: 'POST',
-      signal: AbortSignal.timeout(this.getTimeoutMs()),
+      timeoutMs: this.getTimeoutMs(),
+      maxBytes: 1024 * 1024,
     });
   }
 
@@ -126,6 +145,12 @@ export class Rfc3161TimestampClient {
       : 'Invalid timestamp server';
   }
 
+  private trustedCertificates(): Certificate[] {
+    return parsePemCertificates(
+      this.config.get<string>('PDF_TSA_TRUST_CERTIFICATES', ''),
+    );
+  }
+
   private getTimeoutMs(): number {
     return this.config.get<number>(
       'PDF_TIMESTAMP_TIMEOUT_MS',
@@ -135,11 +160,16 @@ export class Rfc3161TimestampClient {
 }
 
 export function parseTimestampServerUrls(value: string | null): string[] {
-  return (value ?? '')
+  const urls = (value ?? '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
     .map(normalizeTimestampServerUrl);
+  if (urls.length > 3)
+    throw new UnprocessableEntityException(
+      'Configure at most three timestamp endpoints',
+    );
+  return urls;
 }
 
 export function buildTimestampRequest(digest: Buffer): Buffer {
@@ -215,58 +245,16 @@ function buildNonce() {
   );
 }
 
-function parseGrantedTimestampToken(responseBody: Buffer): Buffer {
-  const response = forge.asn1.fromDer(responseBody.toString('binary'));
-  const statusInfo = getAsn1Child(response, 0, 'timestamp status info');
-  const statusValue = getAsn1Child(statusInfo, 0, 'timestamp status');
-  const status = parseAsn1Integer(statusValue);
-
-  if (status !== 0 && status !== 1) {
-    throw new Error(`Timestamp server rejected request with status ${status}`);
-  }
-
-  const token = getOptionalAsn1Child(response, 1);
-
-  if (!token) {
-    throw new Error('Timestamp server response did not include a token');
-  }
-
-  return Buffer.from(forge.asn1.toDer(token).getBytes(), 'binary');
-}
-
-function getAsn1Child(
-  node: Forge.asn1.Asn1,
-  index: number,
-  description: string,
-): Forge.asn1.Asn1 {
-  const child = getOptionalAsn1Child(node, index);
-
-  if (!child) {
-    throw new Error(`Missing ${description}`);
-  }
-
-  return child;
-}
-
-function getOptionalAsn1Child(
-  node: Forge.asn1.Asn1,
-  index: number,
-): Forge.asn1.Asn1 | null {
-  const child = Array.isArray(node.value) ? node.value[index] : null;
-
-  return typeof child === 'string' ? null : (child ?? null);
-}
-
-function parseAsn1Integer(node: Forge.asn1.Asn1): number {
-  if (typeof node.value !== 'string') {
-    throw new Error('Timestamp status was not an integer');
-  }
-
-  return Number.parseInt(Buffer.from(node.value, 'binary').toString('hex'), 16);
-}
-
 function normalizeTimestampServerUrl(value: string): string {
+  if (value.length > 2048)
+    throw new UnprocessableEntityException(
+      'Timestamp endpoint exceeds maximum length',
+    );
   const url = new URL(value);
+  if ((url.username || url.password) && url.protocol !== 'https:')
+    throw new UnprocessableEntityException(
+      'Authenticated TSA endpoints require HTTPS',
+    );
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new UnprocessableEntityException({
@@ -277,8 +265,11 @@ function normalizeTimestampServerUrl(value: string): string {
   return value;
 }
 
-function hasTimestampToken(
-  attempt: TimestampServerAttempt,
-): attempt is TimestampServerAttempt & { token: Buffer } {
-  return 'token' in attempt && Buffer.isBuffer(attempt.token);
+export function timestampEndpointLabel(value: string): string {
+  const url = new URL(value);
+  url.username = '';
+  url.password = '';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
 }

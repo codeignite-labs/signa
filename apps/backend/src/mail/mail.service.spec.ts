@@ -11,10 +11,12 @@ describe('MailService', () => {
   let emailMessages: { create: jest.Mock; save: jest.Mock };
   let encryptedConfigs: { findOne: jest.Mock; save: jest.Mock };
   let mailer: { sendMail: jest.Mock };
-  let branding: jest.Mocked<Pick<MailBrandingService, 'getBaseContext'>>;
+  let branding: jest.Mocked<
+    Pick<MailBrandingService, 'getBaseContext' | 'getAccountContext'>
+  >;
   let i18n: jest.Mocked<Pick<SignaI18nService, 'snapshotLocale' | 'translate'>>;
   let templates: jest.Mocked<
-    Pick<MailTemplateResolver, 'assertTemplateExists'>
+    Pick<MailTemplateResolver, 'assertTemplateExists' | 'renderHtml'>
   >;
   let service: MailService;
 
@@ -56,6 +58,7 @@ describe('MailService', () => {
     };
     branding = {
       getBaseContext: jest.fn().mockReturnValue({ productName: 'Signa' }),
+      getAccountContext: jest.fn().mockResolvedValue({ productName: 'Signa' }),
     };
     i18n = {
       snapshotLocale: jest.fn((locale?: string | null) =>
@@ -68,6 +71,7 @@ describe('MailService', () => {
     };
     templates = {
       assertTemplateExists: jest.fn(),
+      renderHtml: jest.fn().mockReturnValue('<p>Acme</p>'),
     };
     service = new MailService(
       config as unknown as ConfigService,
@@ -105,6 +109,92 @@ describe('MailService', () => {
       accepted: ['ada@example.com'],
       rejected: [],
     });
+  });
+
+  it('applies account branding before SMTP delivery without overriding locale', async () => {
+    branding.getAccountContext.mockResolvedValueOnce({
+      productName: 'Acme',
+      whiteLabel: true,
+    });
+    await service.sendTemplate({
+      accountId: '17',
+      to: { email: 'ada@example.com' },
+      subject: 'Hello',
+      template: 'submitter-invitation',
+      locale: 'fr',
+      context: { whiteLabel: false },
+    });
+    expect(branding.getAccountContext).toHaveBeenCalledWith('17');
+    expect(mailer.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: { productName: 'Acme', whiteLabel: true, locale: 'fr' },
+      }),
+    );
+  });
+
+  it.each(['gmail'])(
+    'uses branded templates for %s delivery',
+    async (provider) => {
+      encryptedConfigs.findOne.mockResolvedValueOnce({
+        value: JSON.stringify({
+          provider,
+          email: 'sender@example.test',
+          access_token: 'fixture',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        }),
+      });
+      branding.getAccountContext.mockResolvedValueOnce({
+        productName: 'Acme',
+        whiteLabel: true,
+      });
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+      try {
+        await service.sendTemplate({
+          accountId: '17',
+          to: { email: 'ada@example.test' },
+          subject: 'Hello',
+          template: 'submitter-invitation',
+          locale: 'fr',
+        });
+        expect(templates.renderHtml).toHaveBeenCalledWith(
+          'submitter-invitation',
+          { productName: 'Acme', whiteLabel: true, locale: 'fr' },
+        );
+        expect(mailer.sendMail).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      } finally {
+        fetchMock.mockRestore();
+      }
+    },
+  );
+
+  it('falls back to SMTP instead of using a legacy Microsoft connection', async () => {
+    encryptedConfigs.findOne.mockResolvedValueOnce({
+      value: JSON.stringify({
+        provider: 'microsoft',
+        access_token: 'legacy-fixture',
+      }),
+    });
+    const fetchMock = jest.spyOn(globalThis, 'fetch');
+    try {
+      await service.sendTemplate({
+        accountId: '17',
+        to: { email: 'ada@example.test' },
+        subject: 'Hello',
+        template: 'submitter-invitation',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mailer.sendMail).toHaveBeenCalled();
+      expect(encryptedConfigs.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { accountId: '17', key: 'email_integration:gmail' },
+        }),
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it('skips delivery when mail is disabled', async () => {

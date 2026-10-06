@@ -12,10 +12,18 @@ export type SignaSigningUrlOptions = {
   name?: string;
   role?: string;
   externalId?: string;
+  theme?: "light" | "dark" | "system";
+  primaryColor?: string;
 };
 
 export function buildSignaSigningUrl(options: SignaSigningUrlOptions): string {
   const url = createBaseUrl(options);
+  if (!["https:", "http:"].includes(url.protocol))
+    throw new Error("Signa signing URLs must use HTTPS or HTTP.");
+  url.searchParams.set("embed", "true");
+  appendOptionalQuery(url, "theme", options.theme);
+  if (options.primaryColor && /^#(?:[a-f\d]{3}|[a-f\d]{6})$/i.test(options.primaryColor))
+    url.searchParams.set("primary-color", options.primaryColor);
 
   appendOptionalQuery(url, "token", options.token);
   appendOptionalQuery(url, "preview", formatBoolean(options.preview));

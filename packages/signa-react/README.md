@@ -324,3 +324,27 @@ git push origin --tags
 For CI, use npm trusted publishing with provenance instead of long-lived npm tokens where possible.
 
 If the `@signajs` scope is unavailable, rename `name` in `packages/signa-react/package.json` before publishing, for example to `signa-react`, then rerun the checks and publish without `--access public` unless the target package is scoped.
+
+## Organization branding and host themes
+
+The hosted signing page loads the document owner's saved logo, business title and
+primary color automatically. The embedding app does not need to copy that data.
+
+Set `theme="light"`, `theme="dark"`, or `theme="system"` to control appearance.
+An optional `primaryColor="#7c3aed"` overrides the accent for this view only; Signa
+still derives readable text/control colors. It does not update the organization's
+saved branding or change the logo/title. Omit the props to use organization defaults.
+Live theme changes use the appearance bridge and preserve unsaved fields.
+
+```tsx
+<SignaForm
+  src="https://signa.example.com/s/submitter-slug"
+  host="https://signa.example.com"
+  theme="dark"
+  primaryColor="#7c3aed"
+/>
+```
+
+When `host` is supplied and `scriptUrl` is omitted, the component loads the matching
+self-hosted `/js/form.js` rather than the CDN build. Explicit `scriptUrl` still wins.
+Deploy the updated hosted frontend together with the SDK for the appearance bridge.

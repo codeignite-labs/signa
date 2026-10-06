@@ -52,6 +52,7 @@ export type SigningField = {
 };
 
 export type SigningForm = {
+  branding?: import("@repo/shared/branding").AccountBranding;
   attachments: SigningAttachment[];
   submission_id: string;
   title: string;

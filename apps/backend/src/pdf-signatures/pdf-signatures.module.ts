@@ -4,7 +4,6 @@ import { EncryptedConfig } from '../accounts/entities/encrypted-config.entity';
 import { PdfRevocationEvidence } from './entities/pdf-revocation-evidence.entity';
 import { PdfTrustRoot } from './entities/pdf-trust-root.entity';
 import { PdfDssVriEmbedder } from './pdf-dss-vri-embedder';
-import { PdfDocumentTimestampEmbedder } from './pdf-document-timestamp-embedder';
 import { PdfAService } from './pdf-a.service';
 import { PdfRevocationCollectorService } from './pdf-revocation-collector.service';
 import { PdfRevocationEvidenceService } from './pdf-revocation-evidence.service';
@@ -24,7 +23,6 @@ import { Rfc3161TimestampClient } from './rfc3161-timestamp-client';
     PdfSignatureService,
     PdfAService,
     PdfDssVriEmbedder,
-    PdfDocumentTimestampEmbedder,
     PdfRevocationCollectorService,
     PdfRevocationEvidenceService,
     PdfTrustRootService,

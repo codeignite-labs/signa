@@ -1,7 +1,9 @@
 "use client";
 
+import { SigningBrandStyle, signingNavigationUrl } from "@/components/branding/signing-brand-style";
+import { BrandLogo } from "@/components/branding/brand-logo";
+
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FileWarningIcon, MailIcon, PenLineIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -70,7 +72,7 @@ export function StartFormPage({ slug }: { slug: string }) {
 
       const response = await submitStartForm(slug, submitter);
 
-      router.push(response.signing_url);
+      router.push(signingNavigationUrl(response.signing_url));
     } catch (submitError) {
       toast.error("Unable to continue", {
         description:
@@ -93,7 +95,7 @@ export function StartFormPage({ slug }: { slug: string }) {
         one_time_code: code,
       });
 
-      router.push(response.signing_url);
+      router.push(signingNavigationUrl(response.signing_url));
     } catch (submitError) {
       toast.error("Verification failed", {
         description:
@@ -138,6 +140,7 @@ export function StartFormPage({ slug }: { slug: string }) {
 
   return (
     <StartFormShell
+      branding={form.branding}
       icon={<PenLineIcon className="size-10" />}
       state={
         step === "identity" ? (
@@ -225,11 +228,13 @@ export function StartFormPage({ slug }: { slug: string }) {
 }
 
 function StartFormShell({
+  branding,
   icon,
   state,
   subtitle,
   title,
 }: {
+  branding?: StartForm["branding"];
   icon?: React.ReactNode;
   state: React.ReactNode;
   subtitle?: string;
@@ -243,14 +248,8 @@ function StartFormShell({
     >
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <div className="flex justify-center">
-          <Image
-            alt="Signa"
-            className="h-12 w-auto object-contain"
-            height={48}
-            priority
-            src="/images/logo.png"
-            width={144}
-          />
+          <SigningBrandStyle branding={branding} />
+          <BrandLogo branding={branding ?? null} />
         </div>
         <section className="rounded-xl bg-[var(--auth-muted)] p-4">
           <div className="flex items-center gap-3">

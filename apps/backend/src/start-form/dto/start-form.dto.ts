@@ -75,6 +75,9 @@ export class VerifyStartFormEmailVerificationDto extends StartFormSubmitterDto {
 }
 
 export class StartFormResponseDto {
+  @ApiProperty({ type: Object, description: 'Document owner branding' })
+  branding!: import('@repo/shared/branding').AccountBranding;
+
   @ApiProperty({
     description: 'Account/workspace name displayed on the public start form.',
     example: 'Acme Legal',

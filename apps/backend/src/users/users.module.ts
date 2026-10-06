@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountMembershipsModule } from '../account-memberships/account-memberships.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Account } from '../accounts/entities/account.entity';
 import { AuthModule } from '../auth/auth.module';
@@ -15,6 +16,7 @@ import { UsersService } from './users.service';
 
 @Module({
   imports: [
+    AccountMembershipsModule,
     TypeOrmModule.forFeature([Account, Team, TeamMember, User, UserConfig]),
     AuthModule,
     AuthorizationModule,

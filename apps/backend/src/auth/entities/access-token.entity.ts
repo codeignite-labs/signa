@@ -9,9 +9,17 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Account } from '../../accounts/entities/account.entity';
 
 @Entity('access_tokens')
 export class AccessToken {
+  @Index()
+  @Column({ name: 'account_id', type: 'bigint', nullable: true })
+  accountId!: string | null;
+
+  @ManyToOne(() => Account, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'account_id' })
+  account!: Account | null;
   @PrimaryGeneratedColumn()
   id!: string;
 

@@ -274,17 +274,19 @@ class IncrementalPdfBuilder {
   }
 
   private serializeXref(offsets: Map<number, number>): string {
-    return [...offsets.entries()]
-      .sort(([left], [right]) => left - right)
-      .map(([objectNumber, offset]) =>
-        [
-          'xref',
-          `${objectNumber} 1`,
-          `${String(offset).padStart(10, '0')} 00000 n `,
-          '',
-        ].join('\n'),
-      )
-      .join('');
+    return (
+      'xref\n' +
+      [...offsets.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([objectNumber, offset]) =>
+          [
+            `${objectNumber} 1`,
+            `${String(offset).padStart(10, '0')} 00000 n `,
+            '',
+          ].join('\n'),
+        )
+        .join('')
+    );
   }
 }
 
@@ -428,31 +430,25 @@ function readStreamObject(
   text: string,
   objectNumber: number,
 ): Buffer[] {
-  const objectHeader = `${objectNumber} 0 obj`;
-  const objectStart = text.indexOf(objectHeader);
-
-  if (objectStart === -1) {
+  const header = [
+    ...text.matchAll(
+      new RegExp(
+        `(?:^|[\\r\\n])${objectNumber}\\s+0\\s+obj\\s*<<([^>]+)>>\\s*stream(?:\\r\\n|\\n)`,
+        'g',
+      ),
+    ),
+  ].at(-1);
+  if (!header || /\/Filter\b/.test(header[1])) return [];
+  const length = Number(/\/Length\s+(\d+)\s*(?:\/|$)/.exec(header[1])?.[1]);
+  if (!Number.isSafeInteger(length) || length < 0) return [];
+  const start = header.index + header[0].length;
+  const end = start + length;
+  if (
+    end > pdfBuffer.length ||
+    !/^[\r\n]+endstream/.test(text.slice(end, end + 14))
+  )
     return [];
-  }
-
-  const streamStart = text.indexOf('stream', objectStart);
-  const streamEnd = text.indexOf('endstream', streamStart);
-
-  if (streamStart === -1 || streamEnd === -1) {
-    return [];
-  }
-
-  const bodyStart =
-    pdfBuffer[streamStart + 'stream'.length] === 0x0d &&
-    pdfBuffer[streamStart + 'stream'.length + 1] === 0x0a
-      ? streamStart + 'stream'.length + 2
-      : streamStart + 'stream'.length + 1;
-  const bodyEnd =
-    pdfBuffer[streamEnd - 2] === 0x0d && pdfBuffer[streamEnd - 1] === 0x0a
-      ? streamEnd - 2
-      : streamEnd - 1;
-
-  return [pdfBuffer.subarray(bodyStart, bodyEnd)];
+  return [pdfBuffer.subarray(start, end)];
 }
 
 function emptyParsedEvidence(hasMatchingVri: boolean): ParsedPdfDssEvidence {

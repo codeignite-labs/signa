@@ -11,7 +11,13 @@ Compatibility rules:
 
 Expected runtime branding context:
 
-- `logoUrl`: absolute URL for the Signa logo.
+- `logoUrl`: durable absolute URL for the account logo, platform fallback, or null for a white-label text identity.
+- `logoBackground`: legacy compatibility value, now `transparent`.
+- `showBusinessName`: whether to display the account title beside the logo. The account title remains the identity fallback when no logo is available.
+- `productName`: account display name (platform name for unscoped emails).
+- `whiteLabel`: hides platform attribution.
+- `brandPrimary` / `brandPrimaryForeground`: contrast-adjusted button colors.
+- `brandBackground`, `brandForeground`, `brandMutedForeground`, `brandMuted`, `brandBorder`: account palette for email chrome.
 - `accountName`: sender/account display name.
 - `locale`: email document language.
 
@@ -37,3 +43,5 @@ Place the final illustration files somewhere publicly served, for example:
 Then provide absolute URLs through mail context, such as:
 
 `https://your-domain.com/images/email/signature-invitation.png`
+
+`MailService` resolves branding from the sending account immediately before delivery. SMTP and connected Gmail delivery use the same templates. Sender addresses and provider account identities remain controlled by the existing mail configuration. Custom `MAIL_TEMPLATE_DIR` templates must consume these context values to display account branding.

@@ -15,6 +15,12 @@ export class AccountLogoResponseDto {
 }
 
 export class SigningCertificateResponseDto {
+  @ApiProperty()
+  is_active!: boolean;
+
+  @ApiProperty({ nullable: true })
+  fingerprint_sha256!: string | null;
+
   @ApiProperty({ example: 'production-cert' })
   name!: string;
 

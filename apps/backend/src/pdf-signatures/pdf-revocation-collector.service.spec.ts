@@ -1,3 +1,5 @@
+import { fetchPki } from './pki-http';
+jest.mock('./pki-http', () => ({ fetchPki: jest.fn() }));
 import { ConfigService } from '@nestjs/config';
 import type { Certificate } from 'pkijs';
 import type { PdfRevocationEvidence } from './entities/pdf-revocation-evidence.entity';
@@ -59,7 +61,7 @@ describe('PdfRevocationCollectorService', () => {
     expect(subsequent).toHaveBeenCalledTimes(1);
   });
 
-  it('reads external CRL evidence from cache before making a network request', async () => {
+  it('revalidates cached CRL bytes instead of trusting cached status', async () => {
     const data = Buffer.from('cached-crl');
     const evidence = {
       dataBase64: data.toString('base64'),
@@ -78,7 +80,7 @@ describe('PdfRevocationCollectorService', () => {
         issuer: fakeCertificate(),
         signer: fakeCertificate(),
       }),
-    ).resolves.toEqual({ data, status: 'good' });
+    ).resolves.toEqual({ data, status: 'unknown' });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -88,7 +90,7 @@ describe('PdfRevocationCollectorService', () => {
       store: jest.fn().mockResolvedValue(null),
     };
     const collector = buildCollector(cache) as unknown as CollectorInternals;
-    jest.spyOn(global, 'fetch').mockResolvedValue(
+    jest.mocked(fetchPki).mockResolvedValue(
       new Response('small-body', {
         headers: { 'content-length': String(10 * 1024 * 1024 + 1) },
         status: 200,

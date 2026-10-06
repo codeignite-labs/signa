@@ -26,6 +26,8 @@ import { UsersModule } from './users/users.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { SmsModule } from './sms/sms.module';
 import { StartFormModule } from './start-form/start-form.module';
+import { BrandingModule } from './branding/branding.module';
+import { AccountMembershipsModule } from './account-memberships/account-memberships.module';
 
 @Module({
   imports: [
@@ -75,6 +77,8 @@ import { StartFormModule } from './start-form/start-form.module';
     WebhooksModule,
     SmsModule,
     StartFormModule,
+    BrandingModule,
+    AccountMembershipsModule,
   ],
   controllers: [AppController],
   providers: [

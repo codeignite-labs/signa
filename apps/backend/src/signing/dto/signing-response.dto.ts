@@ -193,6 +193,9 @@ export class SigningFormConfigDto {
 }
 
 export class SigningResponseDto {
+  @ApiProperty({ type: Object, description: 'Document owner branding' })
+  branding!: import('@repo/shared/branding').AccountBranding;
+
   @ApiProperty({ example: '1' })
   submission_id!: string;
 

@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UserResponseDto {
+  membership_status?: string;
+  shared_identity?: boolean;
   @ApiProperty({ example: '1' })
   id!: string;
 

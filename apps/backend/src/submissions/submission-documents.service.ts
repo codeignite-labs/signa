@@ -632,8 +632,8 @@ export class SubmissionDocumentsService {
       },
     });
     const configByKey = new Map(configs.map((config) => [config.key, config]));
-    const [certificate, timestampServerUrl] = await Promise.all([
-      this.pdfSignatureService.loadDefaultCertificate(submission.accountId),
+    const [signingCertificateName, timestampServerUrl] = await Promise.all([
+      this.pdfSignatureService.getActiveCertificateName(submission.accountId),
       this.pdfSignatureService.getTimestampServerUrl(submission.accountId),
     ]);
     const accountContext = await this.accountsService.getTestingAccountContext(
@@ -648,7 +648,7 @@ export class SubmissionDocumentsService {
       documentFilenameFormat: this.getDocumentFilenameFormat(configByKey),
       flatten: configByKey.get('flatten_result_pdf')?.value !== false,
       isTestMode: accountContext.isTestMode,
-      signingCertificateName: certificate.name,
+      signingCertificateName,
       timestampServerUrl,
       withSignatureId: configByKey.get('with_signature_id')?.value === true,
     };
@@ -680,6 +680,7 @@ export class SubmissionDocumentsService {
 
     return {
       cryptographic_signature_certificate: signed.certificateName ?? undefined,
+      cryptographic_signature_certificate_sha256: signed.certificateFingerprint,
       cryptographic_signature_sub_filter: signed.signatureSubFilter,
       cryptographic_signature_timestamp_embedded: timestamp.embedded,
       cryptographic_signature_timestamp_required: timestamp.required,

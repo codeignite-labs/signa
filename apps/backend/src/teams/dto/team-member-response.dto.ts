@@ -32,6 +32,7 @@ export class TeamMemberUserResponseDto {
 }
 
 export class TeamMemberResponseDto {
+  account_id!: string;
   @ApiProperty({ description: 'Team member row id.', example: '1' })
   id!: string;
 

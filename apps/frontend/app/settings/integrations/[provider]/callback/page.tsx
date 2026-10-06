@@ -12,7 +12,6 @@ import {
 
 const providers = new Set<AccountEmailIntegrationProvider>([
   "gmail",
-  "microsoft",
 ])
 
 export default function IntegrationCallbackPage({

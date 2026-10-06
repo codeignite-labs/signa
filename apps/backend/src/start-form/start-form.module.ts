@@ -1,3 +1,4 @@
+import { BrandingModule } from '../branding/branding.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailModule } from '../mail/mail.module';
@@ -10,6 +11,7 @@ import { StartFormService } from './start-form.service';
 
 @Module({
   imports: [
+    BrandingModule,
     MailModule,
     TypeOrmModule.forFeature([
       Submission,

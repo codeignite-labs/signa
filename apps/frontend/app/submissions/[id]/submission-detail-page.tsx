@@ -1,7 +1,8 @@
 "use client"
 
+import { BrandLogo } from "@/components/branding/brand-logo"
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -252,13 +253,7 @@ export function SubmissionDetailPage({ submissionId }: SubmissionDetailPageProps
             className="flex min-w-0 flex-1 items-center gap-3"
             href={submission.template ? `/templates/${submission.template.id}` : "/templates"}
           >
-            <Image
-              alt="Signa"
-              className="h-11 w-auto object-contain"
-              height={44}
-              src="/images/logo.png"
-              width={76}
-            />
+            <BrandLogo className="max-w-44 sm:max-w-64" />
             <h1 className="truncate text-xl font-semibold md:text-3xl">{title}</h1>
           </Link>
           <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-3">

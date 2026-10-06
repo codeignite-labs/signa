@@ -27,7 +27,7 @@ describe('PdfSignatureVerifierService', () => {
     const signature = extractSignatureInput(signedPdf);
 
     await expect(service.verify(signature)).resolves.toMatchObject({
-      certificateChainStatus: 'trusted',
+      certificateChainStatus: 'external',
       cmsMessageDigestValid: true,
       cmsSignatureValid: true,
       revocationStatus: 'missing',

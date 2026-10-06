@@ -6,7 +6,7 @@ describe('JwtGuard', () => {
     expect(
       new JwtGuard({
         verifyAsync: jest.fn(),
-      } as unknown as JwtService),
+      } as unknown as JwtService, { resolveUser: jest.fn() } as never),
     ).toBeDefined();
   });
 });

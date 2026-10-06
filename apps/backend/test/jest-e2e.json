@@ -4,6 +4,21 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "module": "CommonJS",
+          "moduleResolution": "node",
+          "resolvePackageJsonExports": false
+        }
+      }
+    ]
+  },
+  "moduleNameMapper": {
+    "^otplib$": "<rootDir>/../src/test/otplib.mock.ts",
+    "^uuid$": "<rootDir>/../src/test/uuid.mock.ts",
+    "^@repo/shared/branding$": "<rootDir>/../../../packages/shared/src/branding.ts",
+    "^@repo/shared$": "<rootDir>/../src/test/shared-package.mock.ts"
   }
 }

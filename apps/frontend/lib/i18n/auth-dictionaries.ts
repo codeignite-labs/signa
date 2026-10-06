@@ -33,7 +33,6 @@ type AuthDictionary = {
   pending: Record<AuthMode, string>
   social: {
     google: string
-    microsoft: string
   }
   links: {
     alreadyHaveAccount: string
@@ -96,7 +95,6 @@ export const authDictionaries: Record<Locale, AuthDictionary> = {
     },
     social: {
       google: "SIGN IN WITH GOOGLE",
-      microsoft: "SIGN IN WITH MICROSOFT",
     },
     links: {
       alreadyHaveAccount: "Already have an account",
@@ -157,7 +155,6 @@ export const authDictionaries: Record<Locale, AuthDictionary> = {
     },
     social: {
       google: "INGIA KWA GOOGLE",
-      microsoft: "INGIA KWA MICROSOFT",
     },
     links: {
       alreadyHaveAccount: "Tayari una akaunti",
@@ -218,7 +215,6 @@ export const authDictionaries: Record<Locale, AuthDictionary> = {
     },
     social: {
       google: "SE CONNECTER AVEC GOOGLE",
-      microsoft: "SE CONNECTER AVEC MICROSOFT",
     },
     links: {
       alreadyHaveAccount: "Vous avez déjà un compte",

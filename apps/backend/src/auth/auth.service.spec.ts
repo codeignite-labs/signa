@@ -1,3 +1,5 @@
+import { AccountLinkedAccount } from '../accounts/entities/account-linked-account.entity';
+import { AccountMembershipsService } from '../account-memberships/account-memberships.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -33,6 +35,7 @@ function createRepository<T extends object>(): jest.Mocked<MockRepository<T>> {
 
 describe('AuthService', () => {
   let service: AuthService;
+  let memberships: AccountMembershipsService;
   let accessTokens: jest.Mocked<MockRepository<AccessToken>>;
   let dataSource: jest.Mocked<
     Pick<DataSource, 'getRepository' | 'transaction'>
@@ -51,6 +54,13 @@ describe('AuthService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: getRepositoryToken(AccountLinkedAccount), useValue: { findOne: jest.fn().mockResolvedValue(null) } },
+        { provide: AccountMembershipsService, useValue: {
+          resolveUser: jest.fn().mockResolvedValue({ id: 'user-1', accountId: 'account-1', role: 'admin' }),
+          listMembers: jest.fn().mockResolvedValue([]),
+          changeMember: jest.fn().mockResolvedValue(null),
+          invite: jest.fn(),
+        } },
         AuthService,
         {
           provide: getRepositoryToken(AccessToken),
@@ -86,6 +96,7 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    memberships = module.get(AccountMembershipsService);
   });
 
   it('hashes API tokens with SHA-256', () => {
@@ -115,6 +126,9 @@ describe('AuthService', () => {
       userId: 'user-1',
       accessTokenId: 'token-1',
       role: 'admin',
+      isTestMode: false,
+      productionAccountId: 'account-1',
+      testingAccountId: null,
       apiTokenPermissions: ['templates:read'],
     });
   });
@@ -129,7 +143,8 @@ describe('AuthService', () => {
     await expect(service.resolveApiToken('api-token')).resolves.toBeNull();
   });
 
-  it('returns null when the token user account is archived', async () => {
+  it('returns null when the token account membership is inactive', async () => {
+    jest.mocked(memberships.resolveUser).mockResolvedValue(null);
     accessTokens.findOne.mockResolvedValue({
       user: {
         archivedAt: null,

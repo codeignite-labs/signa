@@ -9,6 +9,7 @@ export type VerifyPdfResponse = {
     byte_range_valid: boolean;
     pades_compliant_sub_filter: boolean;
     timestamp_signature: boolean;
+    signature_timestamp_valid: boolean | null;
     verification_result: string[];
     certificate_chain_status:
       | "expired"
@@ -27,7 +28,12 @@ export type VerifyPdfResponse = {
     cms_message_digest_valid: boolean | null;
     cms_signature_valid: boolean | null;
     ltv_status: "invalid" | "missing" | "valid";
-    revocation_status: "good" | "missing" | "revoked" | "unavailable" | "unknown";
+    revocation_status:
+      | "good"
+      | "missing"
+      | "revoked"
+      | "unavailable"
+      | "unknown";
     signer_name: string | null;
     signing_reason: string | null;
     signing_time: string | null;

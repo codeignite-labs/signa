@@ -1,3 +1,6 @@
+import { Team } from '../teams/entities/team.entity';
+import { TeamMember } from '../teams/entities/team-member.entity';
+import { AccountMembershipsService } from '../account-memberships/account-memberships.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { IsNull } from 'typeorm';
@@ -91,6 +94,16 @@ describe('UsersService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: getRepositoryToken(Team), useValue: createRepository<Team>() },
+        { provide: getRepositoryToken(TeamMember), useValue: createRepository<TeamMember>() },
+        { provide: AccountMembershipsService, useValue: {
+          resolveUser: jest.fn().mockResolvedValue({ id: 'user-1', accountId: 'account-1', role: 'admin' }),
+          hasMembershipRecord: jest.fn().mockResolvedValue(false),
+          membershipUserIds: jest.fn().mockResolvedValue(new Set()),
+          listMembers: jest.fn().mockResolvedValue([]),
+          changeMember: jest.fn().mockResolvedValue(null),
+          invite: jest.fn(),
+        } },
         UsersService,
         {
           provide: getRepositoryToken(Account),

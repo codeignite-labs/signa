@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useSyncExternalStore } from "react"
+import { useEffect, useLayoutEffect, useSyncExternalStore } from "react"
 
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 
@@ -16,8 +16,8 @@ export function ThemeModeSwitcher() {
     getServerThemeSnapshot
   )
 
-  useEffect(() => {
-    applyTheme(theme)
+  useLayoutEffect(() => {
+    applyTheme(getThemeSnapshot())
   }, [theme])
 
   useEffect(() => {
@@ -55,9 +55,12 @@ function subscribeToTheme(onStoreChange: () => void): () => void {
 }
 
 function getThemeSnapshot(): ThemeMode {
-  const storedTheme = window.localStorage.getItem(storageKey)
-
-  return isThemeMode(storedTheme) ? storedTheme : "system"
+  try {
+    const storedTheme = window.localStorage.getItem(storageKey)
+    return isThemeMode(storedTheme) ? storedTheme : "system"
+  } catch {
+    return "system"
+  }
 }
 
 function getServerThemeSnapshot(): ThemeMode {

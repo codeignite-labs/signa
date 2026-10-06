@@ -1,3 +1,4 @@
+import { brandingBootstrapScript } from "@/lib/branding/branding-bootstrap";
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist_Mono } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
@@ -30,16 +31,23 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${bricolage.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          id="signa-branding-init"
+          dangerouslySetInnerHTML={{ __html: brandingBootstrapScript }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
         <NextTopLoader
-          color="#16304f"
+          color="var(--primary)"
           height={3}
-          shadow="0 0 10px rgba(22, 48, 79, 0.35)"
+          shadow="0 0 10px var(--primary)"
           showSpinner={false}
         />
         <Providers>{children}</Providers>
