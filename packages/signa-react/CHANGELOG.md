@@ -1,10 +1,10 @@
-## Unreleased
-
-- Inherit organization branding and support `theme` / `primaryColor` overrides.
-- Update appearance without reloading an in-progress signing document.
-- Improve loader behavior and strengthen hosted-frame URL/message handling.
-
 # @signajs/react
+
+## 0.2.0
+
+### Minor Changes
+
+- Inherit organization branding and add optional `theme` and `primaryColor` host overrides. Update embedded appearance without reloading an in-progress signing document, improve loading behavior, and strengthen hosted-frame URL and message handling.
 
 ## 0.1.4
 

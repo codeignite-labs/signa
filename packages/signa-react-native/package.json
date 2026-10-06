@@ -1,6 +1,6 @@
 {
   "name": "@signajs/react-native",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React Native WebView components for embedding Signa signing flows.",
   "license": "MIT",
   "type": "module",
