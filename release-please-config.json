@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "2252d44fdb762ba64d7fffd2f0533ed8b4b88d44",
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "signa",
+      "include-component-in-tag": false,
+      "include-v-in-tag": true,
+      "draft": true,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "apps/backend/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "apps/frontend/package.json",
+          "jsonpath": "$.version"
+        },
+        "Dockerfile",
+        "docker-compose.yml",
+        "apps/backend/src/env.schema.ts",
+        "apps/backend/src/app.service.ts"
+      ],
+      "force-tag-creation": true,
+      "exclude-paths": [
+        "packages/signa-react",
+        "packages/signa-react-native",
+        ".changeset",
+        "tests/sdk",
+        "vitest.config.mjs",
+        "apps/marketing"
+      ]
+    }
+  }
+}

@@ -1,5 +1,11 @@
 # @signajs/react
 
+[![CI](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40signajs%2Freact)](https://www.npmjs.com/package/@signajs/react)
+[![Downloads](https://img.shields.io/npm/dm/%40signajs%2Freact)](https://www.npmjs.com/package/@signajs/react)
+[![SDK coverage gate](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main&label=SDK%20coverage%20%E2%89%A595%25)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 React components for embedding Signa signing forms and template builder workflows.
 
 The API intentionally mirrors `@docuseal/react` so existing DocuSeal-style embeds can migrate with minimal changes. The components load Signa browser custom elements from your Signa host and pass configuration through `data-*` attributes.
@@ -354,3 +360,12 @@ Deploy the updated hosted frontend together with the SDK for the appearance brid
 [MIT](./LICENSE). This license covers this SDK, not the separately hosted Signa
 platform. The platform is AGPL-3.0-only; using this SDK does not relicense the
 platform or waive its source and attribution obligations.
+
+## Tests and coverage
+
+From the repository root, run `pnpm test:sdk:coverage`. CI enforces at least 95%
+lines, statements, functions and branches per SDK runtime file, including the
+React SDK browser bridges. Download the `sdk-coverage` artifact from a CI run for
+HTML and LCOV reports. The badge reflects the gate status, not a hard-coded
+percentage. Native platform/WebView primitives are mocked; device testing remains
+separate. See [release and coverage guidance](../../RELEASING.md).

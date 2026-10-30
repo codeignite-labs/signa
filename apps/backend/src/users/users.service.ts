@@ -205,7 +205,11 @@ export class UsersService {
           identity.id,
         )))
     ) {
-      if (Object.entries(options.input).some(([key, value]) => key !== 'role' && value !== undefined))
+      if (
+        Object.entries(options.input).some(
+          ([key, value]) => key !== 'role' && value !== undefined,
+        )
+      )
         throw new ForbiddenException(
           'Only the account role can be changed for a shared login identity',
         );

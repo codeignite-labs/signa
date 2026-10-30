@@ -88,7 +88,10 @@ export class RealtimeController {
     try {
       const payload =
         await this.jwtService.verifyAsync<WebSessionJwtPayload>(token);
-      const user = await this.usersService.findActiveUser(payload.userId, payload.accountId);
+      const user = await this.usersService.findActiveUser(
+        payload.userId,
+        payload.accountId,
+      );
 
       if (!user || user.accountId !== payload.accountId) {
         throw new Error('Invalid realtime token');

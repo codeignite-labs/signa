@@ -22,7 +22,9 @@ describe('brand color contrast', () => {
             const p = brandPalette(color, dark);
             const surfaces = ['--background', '--card', '--muted', '--accent'];
             expect(p['--brand-original']).toBe(color);
-            expect(contrastRatio(p['--border'], p['--card'])).toBeLessThan(dark ? 2.6 : 1.6);
+            expect(contrastRatio(p['--border'], p['--card'])).toBeLessThan(
+              dark ? 2.6 : 1.6,
+            );
             expect(p['--border']).not.toBe(p['--input']);
             for (const surface of surfaces) {
               for (const text of [

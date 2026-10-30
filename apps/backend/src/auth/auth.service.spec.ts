@@ -54,13 +54,23 @@ describe('AuthService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        { provide: getRepositoryToken(AccountLinkedAccount), useValue: { findOne: jest.fn().mockResolvedValue(null) } },
-        { provide: AccountMembershipsService, useValue: {
-          resolveUser: jest.fn().mockResolvedValue({ id: 'user-1', accountId: 'account-1', role: 'admin' }),
-          listMembers: jest.fn().mockResolvedValue([]),
-          changeMember: jest.fn().mockResolvedValue(null),
-          invite: jest.fn(),
-        } },
+        {
+          provide: getRepositoryToken(AccountLinkedAccount),
+          useValue: { findOne: jest.fn().mockResolvedValue(null) },
+        },
+        {
+          provide: AccountMembershipsService,
+          useValue: {
+            resolveUser: jest.fn().mockResolvedValue({
+              id: 'user-1',
+              accountId: 'account-1',
+              role: 'admin',
+            }),
+            listMembers: jest.fn().mockResolvedValue([]),
+            changeMember: jest.fn().mockResolvedValue(null),
+            invite: jest.fn(),
+          },
+        },
         AuthService,
         {
           provide: getRepositoryToken(AccessToken),
@@ -144,7 +154,7 @@ describe('AuthService', () => {
   });
 
   it('returns null when the token account membership is inactive', async () => {
-    jest.mocked(memberships.resolveUser).mockResolvedValue(null);
+    jest.spyOn(memberships, 'resolveUser').mockResolvedValue(null);
     accessTokens.findOne.mockResolvedValue({
       user: {
         archivedAt: null,

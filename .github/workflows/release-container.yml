@@ -1,0 +1,90 @@
+name: Publish application container
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing stable application tag, e.g. v0.2.0 (retry only)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.event.release.tag_name || inputs.tag }}
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/release/check-version.mjs --tag "$RELEASE_TAG"
+          git merge-base --is-ancestor HEAD origin/main
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease --jq 'if .isDraft or .isPrerelease then error("Stable published release required") else empty end'
+          echo "VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          echo "COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Refuse overwriting a released image
+        run: |
+          if output=$(docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" 2>&1); then
+            echo "Release image already exists; use its digest instead of republishing."
+            exit 1
+          elif ! printf '%s\n' "$output" | grep -Eq 'manifest unknown|MANIFEST_UNKNOWN|NAME_UNKNOWN|: not found$'; then
+            echo "Could not establish that the release image is absent; refusing publication."
+            printf '%s\n' "$output"
+            exit 1
+          fi
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: image
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.RELEASE_TAG }}
+            ${{ env.IMAGE }}:sha-${{ env.COMMIT_SHA }}
+          build-args: |
+            APP_VERSION=${{ env.VERSION }}
+            APP_COMMIT_SHA=${{ env.COMMIT_SHA }}
+            APP_BUILD_TIME=${{ env.BUILD_TIME }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.COMMIT_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          provenance: mode=max
+          sbom: true
+      - name: Record deployment digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: echo "Deploy \`$IMAGE@$DIGEST\`. Roll back by selecting a previous release digest; review database compatibility first." >> "$GITHUB_STEP_SUMMARY"
