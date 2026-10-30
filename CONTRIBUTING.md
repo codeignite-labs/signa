@@ -14,9 +14,15 @@ steps to reproduce, expected behavior and actual behavior. Supply a minimal
 reproduction or synthetic document when possible. Remove personal data, API
 tokens, private keys and customer documents from logs and attachments.
 
-Discuss substantial features, architecture changes and breaking APIs in an issue
-before implementing them. Small corrections can go straight to a PR. Keep each
-PR focused on one outcome and batch related documentation corrections together.
+Open an issue before implementing every change or fix, including small
+corrections. Describe its scope and acceptance criteria, apply relevant type/area
+labels and assign it to `zedjarvis`. Discuss substantial features, architecture
+changes and breaking APIs there before implementing them. Keep each PR focused
+on one outcome and batch related documentation corrections together.
+
+If you cannot edit issue labels or assignees, suggest the affected area in the
+issue and ask a maintainer to triage and assign it. Those GitHub controls require
+repository permissions; contributors are not expected to bypass them.
 
 Communicate respectfully and explain disagreements with concrete examples.
 Maintainers may request a smaller scope or decline changes that do not fit the
@@ -93,6 +99,9 @@ changes. Signa uses ESLint and Prettier; format only touched files with
 
 ## Validate the change
 
+See [TESTING.md](./TESTING.md) for main-app coverage commands, honest baselines,
+regression floors and remaining work toward the 95% target.
+
 Run checks relevant to the changed packages and report the results. Start with
 focused tests, then broaden when the risk warrants it. Add regression coverage
 for behavioral bugs; a documentation-only change does not need runtime tests.
@@ -129,7 +138,12 @@ change; use `docs:` or `chore:` for work that does not change runtime behavior.
 
 Explain the problem, resulting behavior, validation and any deployment or
 migration steps. Link the relevant issue using `Closes #123` only when the PR
-actually resolves it. Label incomplete work as a draft and identify what remains.
+actually resolves it. Every implementation PR must reference its completed issue
+with `Closes #<issue-number>` so merging to `main` closes that issue. Keep broader
+tracking issues open until all their acceptance criteria are satisfied. For
+stacked PRs, identify the prerequisite and retarget to `main` after it merges;
+closing keywords do not close issues when merging into a non-default branch.
+Label incomplete work as a draft and identify what remains.
 Respond to review feedback with follow-up commits; there is no need to force-push
 just to tidy history. Merge decisions and release timing belong to maintainers.
 

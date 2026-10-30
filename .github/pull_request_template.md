@@ -1,6 +1,13 @@
 ## Change
 
-Describe the problem and resulting behavior. Link the relevant issue, if any.
+Describe the problem and resulting behavior.
+
+Closes #<issue-number>
+
+The issue must have relevant labels and be assigned to `zedjarvis` before
+implementation. Use closing keywords only for completed issue scope. For a
+stacked PR, identify the prerequisite and retarget to `main` before merging so
+the issue closes automatically.
 
 ## Validation
 

@@ -45,6 +45,14 @@ cd signa
 - `packages/shared`: shared Zod schemas, contracts, and types.
 - `packages/ts-config`: shared TypeScript config.
 
+## Tests and coverage
+
+Run `pnpm test:frontend:coverage` and `pnpm test:backend:coverage` for complete
+main-app reports. The application-wide 95% goal remains in progress; current
+coverage is substantially below it. See [TESTING.md](./TESTING.md) for measured
+baselines, regression floors and feature-area priorities. The SDK coverage badge
+above refers only to the independent SDK gate.
+
 ## Local Development
 
 ```bash

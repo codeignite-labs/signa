@@ -145,6 +145,22 @@
       "^uuid$": "<rootDir>/test/uuid.mock.ts",
       "^@repo/shared/branding$": "<rootDir>/../../../packages/shared/src/branding.ts",
       "^@repo/shared$": "<rootDir>/test/shared-package.mock.ts"
+    },
+    "coverageProvider": "babel",
+    "coverageReporters": [
+      "text-summary",
+      "json",
+      "json-summary",
+      "html",
+      "lcov"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 43.5,
+        "branches": 36.8,
+        "functions": 41.6,
+        "lines": 43.4
+      }
     }
   }
 }

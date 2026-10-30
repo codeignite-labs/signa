@@ -25,6 +25,14 @@ Signa is a TypeScript recreation of DocuSeal. Keep backend endpoints compatible 
 - `pnpm lint`: lint every workspace.
 - `pnpm typecheck`: type-check every workspace.
 
+## Issue-first delivery
+
+- Before starting new implementation or a fix, open a GitHub issue with a concrete scope and acceptance criteria. Apply relevant existing labels (or create a descriptive area/type label when needed) and assign the issue to `zedjarvis`.
+- Implement and verify that issue's scope on a focused branch. Open a PR after implementation with `Closes #<issue-number>` in its description, validation results, and any material limitations.
+- Target the default branch for automatic issue closure. For a stacked PR, state its dependency and retarget to `main` after the prerequisite PR merges; a closing keyword against a non-default branch does not close the issue.
+- Keep broad tracking issues open until their full acceptance criteria are met. Close completed batch issues through their PRs rather than claiming a partial batch completes the tracking goal.
+- Do not merge or publish merely because a PR was requested; follow the user's current authorization for those actions.
+
 ## Backend Persistence
 
 - Use TypeORM with PostgreSQL.

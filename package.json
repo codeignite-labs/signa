@@ -34,7 +34,11 @@
     "format": "prettier --write .",
     "release:check": "node scripts/release/check-version.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",
-    "test:sdk:coverage": "vitest run --coverage"
+    "test:sdk:coverage": "vitest run --coverage",
+    "test:frontend": "vitest run --config vitest.frontend.config.mjs",
+    "test:frontend:coverage": "vitest run --config vitest.frontend.config.mjs --coverage",
+    "test:backend:coverage": "pnpm --filter backend test --runInBand --testTimeout=30000 --coverage",
+    "test:frontend:types": "pnpm --filter frontend exec tsc --noEmit -p ../../tests/frontend/tsconfig.json"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
