@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Supertest response bodies are asserted at the HTTP boundary. */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- Supertest response bodies are asserted at the HTTP boundary. */
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

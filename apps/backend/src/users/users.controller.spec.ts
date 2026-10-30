@@ -26,12 +26,19 @@ describe('UsersController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
       providers: [
-        { provide: AccountMembershipsService, useValue: {
-          resolveUser: jest.fn().mockResolvedValue({ id: 'user-1', accountId: 'account-1', role: 'admin' }),
-          listMembers: jest.fn().mockResolvedValue([]),
-          changeMember: jest.fn().mockResolvedValue(null),
-          invite: jest.fn(),
-        } },
+        {
+          provide: AccountMembershipsService,
+          useValue: {
+            resolveUser: jest.fn().mockResolvedValue({
+              id: 'user-1',
+              accountId: 'account-1',
+              role: 'admin',
+            }),
+            listMembers: jest.fn().mockResolvedValue([]),
+            changeMember: jest.fn().mockResolvedValue(null),
+            invite: jest.fn(),
+          },
+        },
         {
           provide: UsersService,
           useValue: usersService,

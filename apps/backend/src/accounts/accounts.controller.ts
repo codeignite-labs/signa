@@ -281,8 +281,7 @@ export class AccountsController {
 
   @Get('integrations')
   @ApiOperation({
-    description:
-      'Lists connected account email integrations such as Gmail.',
+    description: 'Lists connected account email integrations such as Gmail.',
     summary: 'List email integrations',
   })
   @ApiOkResponse({ type: AccountEmailIntegrationListResponseDto })
