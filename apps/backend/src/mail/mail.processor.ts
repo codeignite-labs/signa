@@ -125,7 +125,7 @@ export class MailProcessor extends WorkerHost {
     const result = await this.send(mail, job, submitter);
 
     if (result === 'sent') {
-      await this.recordSubmissionEvent(submitter, 'email_reminder_sent', {
+      await this.recordSubmissionEvent(submitter, 'send_reminder_email', {
         reminder_index: job.data.reminderIndex,
         template: mail.template,
         to: submitter.email,

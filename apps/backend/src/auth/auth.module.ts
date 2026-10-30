@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AccountMembershipsModule } from '../account-memberships/account-memberships.module';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -16,9 +16,9 @@ import { OAuthAuthService } from './oauth-auth.service';
 
 @Module({
   imports: [
-    AccountMembershipsModule,
+    forwardRef(() => AccountMembershipsModule),
     TypeOrmModule.forFeature([AccessToken, AccountLinkedAccount]),
-    MailModule,
+    forwardRef(() => MailModule),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -39,7 +39,7 @@ import { OAuthAuthService } from './oauth-auth.service';
     AdminGuard,
   ],
   exports: [
-    AccountMembershipsModule,
+    forwardRef(() => AccountMembershipsModule),
     AuthService,
     ApiTokenGuard,
     ApiOrJwtGuard,

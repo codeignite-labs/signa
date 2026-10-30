@@ -1,3 +1,4 @@
+import { lockTeamMemberships } from '../teams/team-membership-lock';
 import {
   ConflictException,
   ForbiddenException,
@@ -11,7 +12,6 @@ import { MailService } from '../mail/mail.service';
 import { AccountMembership } from './entities/account-membership.entity';
 import { TeamInvitation } from '../teams/entities/team-invitation.entity';
 import { TeamMember } from '../teams/entities/team-member.entity';
-import { Team } from '../teams/entities/team.entity';
 import { createHash } from 'node:crypto';
 
 @Injectable()
@@ -160,10 +160,9 @@ export class AccountMembershipsService {
         throw new ForbiddenException(
           'Invitation belongs to a different email address',
         );
-      const team = await manager.findOneBy(Team, {
-        id: invitation.teamId,
+      const team = await lockTeamMemberships(manager, {
+        teamId: invitation.teamId,
         accountId: invitation.accountId,
-        archivedAt: IsNull(),
       });
       const account = await manager.findOne(Account, {
         where: { id: invitation.accountId, archivedAt: IsNull() },

@@ -10,11 +10,15 @@ const pngDataUri =
 describe('SubmitterValueNormalizer', () => {
   let normalizer: SubmitterValueNormalizer;
   let storage: jest.Mocked<
-    Pick<StorageService, 'findRecordAttachments' | 'createAttachment'>
+    Pick<
+      StorageService,
+      'findRecordAttachments' | 'createAttachment' | 'readSignedBlobUrl'
+    >
   >;
 
   beforeEach(() => {
     storage = {
+      readSignedBlobUrl: jest.fn().mockResolvedValue(null),
       findRecordAttachments: jest.fn().mockResolvedValue([]),
       createAttachment: jest.fn(),
     };
@@ -179,6 +183,38 @@ describe('SubmitterValueNormalizer', () => {
         submitterUuid: 'first-party',
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('imports own-instance signed attachments through storage without downloading them', async () => {
+    storage.readSignedBlobUrl.mockResolvedValue({
+      buffer: Buffer.from('%PDF local'),
+      filename: 'Original.pdf',
+      contentType: 'application/pdf',
+    });
+    const fetch = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new Error('must not use network'));
+    try {
+      const result = await normalizer.normalizeCreateInput({
+        templateFields: [
+          { uuid: 'file', name: 'File', type: 'file', submitter_uuid: 'party' },
+        ],
+        submitterInput: {
+          values: {
+            File: 'http://localhost:3001/api/storage/blobs/signed/Original.pdf',
+          },
+        },
+        submitterUuid: 'party',
+      });
+      expect(result.pendingAttachments[0]).toMatchObject({
+        buffer: Buffer.from('%PDF local'),
+        filename: 'Original.pdf',
+        contentType: 'application/pdf',
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
   });
 
   it('persists pending attachments against the created submitter', async () => {

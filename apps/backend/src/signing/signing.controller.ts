@@ -397,8 +397,8 @@ export class SigningController {
   })
   @ApiOperation({
     description:
-      'Records payment provider attempt state for payment fields so the signing flow can block completion until payment succeeds.',
-    summary: 'Record public signing payment attempt state',
+      'Initializes an unconfirmed payment attempt. Client requests cannot confirm payment success; required payment fields remain blocked until trusted provider confirmation is implemented.',
+    summary: 'Initialize an unconfirmed signing payment attempt',
   })
   @ApiOkResponse({
     schema: {
@@ -427,8 +427,8 @@ export class SigningController {
   })
   @ApiOperation({
     description:
-      'Records identity verification provider state for fields or flows that require KBA or identity checks.',
-    summary: 'Record public signing identity verification state',
+      'Initializes a pending identity verification. Client requests cannot mark an identity verified; required verification fields remain blocked until trusted provider confirmation is implemented.',
+    summary: 'Initialize pending signing identity verification',
   })
   @ApiOkResponse({
     schema: {

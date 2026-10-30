@@ -12,6 +12,7 @@ import {
 async function encryptLegacyKeys() {
   encryptSigningKey('configuration check', 'maintenance');
   dataSource.setOptions({
+    logger: 'advanced-console',
     logging: false,
     synchronize: false,
     migrationsRun: false,

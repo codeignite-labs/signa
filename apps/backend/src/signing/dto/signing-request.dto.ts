@@ -108,11 +108,12 @@ export class CreatePaymentAttemptDto {
   provider_reference?: string;
 
   @ApiPropertyOptional({
-    description: 'Current payment attempt status.',
-    enum: ['pending', 'processing', 'succeeded', 'failed', 'cancelled'],
+    description:
+      'Optional pending initialization. Provider outcomes cannot be supplied by the signer.',
+    enum: ['pending'],
   })
   @IsOptional()
-  @IsIn(['pending', 'processing', 'succeeded', 'failed', 'cancelled'])
+  @IsIn(['pending'])
   status?: string;
 
   @ApiPropertyOptional({
@@ -158,11 +159,12 @@ export class CreateIdentityVerificationDto {
   provider_reference?: string;
 
   @ApiPropertyOptional({
-    description: 'Current identity verification status.',
-    enum: ['pending', 'verified', 'failed', 'expired'],
+    description:
+      'Optional pending initialization. Verified outcomes require a trusted provider.',
+    enum: ['pending'],
   })
   @IsOptional()
-  @IsIn(['pending', 'verified', 'failed', 'expired'])
+  @IsIn(['pending'])
   status?: string;
 
   @ApiPropertyOptional({

@@ -8,12 +8,14 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { createBullBoardOptions } from './bull-board-options';
 import { createMailerOptions } from './mailer-options';
 import { createQueueOptions } from './queue-options';
+import { QueueRegistrationService } from './queue-registration/queue-registration.service';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     BullModule.forRootAsync({
+      extraOptions: { manualRegistration: true },
       inject: [ConfigService],
       useFactory: createQueueOptions,
     }),
@@ -26,5 +28,6 @@ import { createQueueOptions } from './queue-options';
       useFactory: createMailerOptions,
     }),
   ],
+  providers: [QueueRegistrationService],
 })
 export class RuntimeModule {}

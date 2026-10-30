@@ -100,3 +100,38 @@ function createConfig(values: Record<string, unknown>): ConfigService {
     }),
   } as unknown as ConfigService;
 }
+
+it('reads PostgreSQL CLI environment strings and host defaults without schema coercion', () => {
+  const options = createTypeOrmOptions(
+    new ConfigService({
+      DATABASE_TYPE: 'postgresql',
+      DATABASE_URL: '',
+      DATABASE_HOST: '',
+      DATABASE_PORT: '6543',
+      DATABASE_SSL: 'true',
+      DATABASE_LOGGING: 'false',
+    }),
+  );
+  expect(options).toMatchObject({
+    type: 'postgres',
+    host: 'localhost',
+    port: 6543,
+    ssl: { rejectUnauthorized: false },
+    logging: false,
+    synchronize: false,
+  });
+});
+it('honors the alternate SQLite dialect identifier in CLI configuration', () => {
+  const options = createTypeOrmOptions(
+    new ConfigService({
+      DATABASE_TYPE: 'better-sqlite3',
+      SQLITE_SYNCHRONIZE: 'false',
+      DATABASE_LOGGING: 'true',
+    }),
+  );
+  expect(options).toMatchObject({
+    type: 'better-sqlite3',
+    synchronize: false,
+    logging: true,
+  });
+});

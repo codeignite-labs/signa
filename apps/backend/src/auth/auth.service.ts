@@ -377,6 +377,12 @@ export class AuthService {
   }
 
   async createLoginResponse(identity: User): Promise<AuthResponseDto> {
+    const user = await this.resolveActiveLoginUser(identity);
+    if (!user) throw new UnauthorizedException('No active account membership');
+    return this.createAuthResponse(user, user.account);
+  }
+
+  private async resolveActiveLoginUser(identity: User): Promise<User | null> {
     let user = await this.memberships.resolveUser(
       identity.id,
       identity.accountId,
@@ -388,8 +394,7 @@ export class AuthService {
       if (account)
         user = await this.memberships.resolveUser(identity.id, account.id);
     }
-    if (!user) throw new UnauthorizedException('No active account membership');
-    return this.createAuthResponse(user, user.account);
+    return user;
   }
 
   resolveSessionUser(payload: WebSessionJwtPayload): Promise<User | null> {
@@ -402,9 +407,9 @@ export class AuthService {
       relations: { account: true },
     });
 
-    if (!user || user.archivedAt || user.account.archivedAt) {
-      return { ok: true };
-    }
+    if (!user || user.archivedAt) return { ok: true };
+    const activeUser = await this.resolveActiveLoginUser(user);
+    if (!activeUser) return { ok: true };
 
     const token = createPasswordResetToken();
 
@@ -414,7 +419,7 @@ export class AuthService {
 
     try {
       await this.mailService.sendPasswordReset({
-        accountId: user.accountId,
+        accountId: activeUser.accountId,
         email: user.email,
         firstName: user.firstName,
         token,
@@ -443,18 +448,32 @@ export class AuthService {
     if (
       !user ||
       user.archivedAt ||
-      user.account.archivedAt ||
-      !this.isPasswordResetTokenFresh(user.resetPasswordSentAt)
+      !this.isPasswordResetTokenFresh(user.resetPasswordSentAt) ||
+      !(await this.resolveActiveLoginUser(user))
     ) {
       throw new UnprocessableEntityException({
         error: 'Password reset token is invalid or expired',
       });
     }
 
-    user.encryptedPassword = await hashPassword(input.password);
-    user.resetPasswordToken = null;
-    user.resetPasswordSentAt = null;
-    await this.dataSource.getRepository(User).save(user);
+    const encryptedPassword = await hashPassword(input.password);
+    const consumed = await this.dataSource.getRepository(User).update(
+      {
+        id: user.id,
+        resetPasswordToken: hashPasswordResetToken(input.token),
+        archivedAt: IsNull(),
+      },
+      {
+        encryptedPassword,
+        resetPasswordToken: null,
+        resetPasswordSentAt: null,
+      },
+    );
+    if (consumed.affected !== 1) {
+      throw new UnprocessableEntityException({
+        error: 'Password reset token is invalid or expired',
+      });
+    }
 
     return { ok: true };
   }

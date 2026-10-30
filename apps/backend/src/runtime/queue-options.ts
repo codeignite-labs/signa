@@ -16,9 +16,6 @@ export function createQueueOptions(
 ): BullRootModuleOptions {
   return {
     connection: getQueueConnection(config),
-    extraOptions: {
-      manualRegistration: !config.get<boolean>('QUEUE_ENABLED', false),
-    },
     prefix: config.get<string>('QUEUE_PREFIX', 'signa'),
     defaultJobOptions: {
       attempts: config.get<number>('QUEUE_DEFAULT_ATTEMPTS', 3),

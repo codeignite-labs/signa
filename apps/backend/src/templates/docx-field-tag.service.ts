@@ -209,13 +209,14 @@ function applyFieldAttribute(
 
 function parsePdfTextBbox(html: string): PdfWord[] {
   const pagePattern =
-    /<page[^>]*number="(?<number>\d+)"[^>]*width="(?<width>[\d.]+)"[^>]*height="(?<height>[\d.]+)"[^>]*>(?<body>[\s\S]*?)<\/page>/g;
+    /<page[^>]*width="(?<width>[\d.]+)"[^>]*height="(?<height>[\d.]+)"[^>]*>(?<body>[\s\S]*?)<\/page>/g;
   const wordPattern =
     /<word[^>]*xMin="(?<xMin>[\d.]+)"[^>]*yMin="(?<yMin>[\d.]+)"[^>]*xMax="(?<xMax>[\d.]+)"[^>]*yMax="(?<yMax>[\d.]+)"[^>]*>(?<text>[\s\S]*?)<\/word>/g;
   const words: PdfWord[] = [];
 
+  let page = 0;
   for (const pageMatch of html.matchAll(pagePattern)) {
-    const page = Number(pageMatch.groups?.number ?? '1');
+    page += 1;
     const pageWidth = Number(pageMatch.groups?.width ?? '1');
     const pageHeight = Number(pageMatch.groups?.height ?? '1');
     const body = pageMatch.groups?.body ?? '';

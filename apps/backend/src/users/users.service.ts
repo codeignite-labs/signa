@@ -1,8 +1,10 @@
+import { lockTeamMemberships } from '../teams/team-membership-lock';
 import {
   ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { isSignaRole, type SignaRole } from '@repo/shared';
@@ -569,7 +571,10 @@ export class UsersService {
     input: ImportUserRowDto,
   ): Promise<{ status: 'created' | 'restored'; user: User }> {
     const email = input.email.toLowerCase();
-    const existingUser = await this.users.findOne({ where: { email } });
+    const existingUser = await this.users.findOne({
+      where: { email },
+      withDeleted: true,
+    });
 
     if (existingUser && !existingUser.archivedAt) {
       throw new ConflictException({ error: 'Email already exists' });
@@ -596,29 +601,33 @@ export class UsersService {
     }
 
     const team = await this.findOrCreateImportedTeam(accountId, name);
-    const existingMember = await this.teamMembers.findOne({
-      where: {
-        teamId: team.id,
-        userId: user.id,
-      },
-      withDeleted: true,
+    await this.teams.manager.transaction(async (manager) => {
+      if (
+        !(await lockTeamMemberships(manager, { accountId, teamId: team.id }))
+      ) {
+        throw new NotFoundException({ error: 'Team not found' });
+      }
+      const members = manager.getRepository(TeamMember);
+      const existingMember = await members.findOne({
+        where: { accountId, teamId: team.id, userId: user.id },
+        withDeleted: true,
+      });
+      if (existingMember) {
+        // Restoring an archived membership must not restore old manager privileges.
+        if (existingMember.archivedAt) existingMember.role = 'member';
+        existingMember.archivedAt = null;
+        await members.save(existingMember);
+        return;
+      }
+      await members.save(
+        members.create({
+          accountId,
+          role: 'member',
+          teamId: team.id,
+          userId: user.id,
+        }),
+      );
     });
-
-    if (existingMember) {
-      existingMember.archivedAt = null;
-      existingMember.role = 'member';
-      await this.teamMembers.save(existingMember);
-      return;
-    }
-
-    await this.teamMembers.save(
-      this.teamMembers.create({
-        accountId,
-        role: 'member',
-        teamId: team.id,
-        userId: user.id,
-      }),
-    );
   }
 
   private async findOrCreateImportedTeam(

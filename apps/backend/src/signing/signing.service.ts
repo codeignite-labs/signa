@@ -201,8 +201,8 @@ export class SigningService {
 
     if (input.completed) {
       this.assertRequiredFieldsComplete(submitter);
-      await this.assertRequiredPaymentFieldsComplete(submitter);
-      await this.assertRequiredIdentityFieldsComplete(submitter);
+      this.assertRequiredPaymentFieldsComplete(submitter);
+      this.assertRequiredIdentityFieldsComplete(submitter);
       await this.assertSigningReasonsComplete(submitter);
       submitter.completedAt = new Date();
     }
@@ -581,14 +581,19 @@ export class SigningService {
       input.field_uuid,
       'payment',
     );
-    const status = normalizePaymentStatus(input.status);
-    const preferences = toRecord(field.preferences);
+    if (input.status !== undefined && input.status !== 'pending') {
+      throw new UnprocessableEntityException({
+        error: 'Payment status must be confirmed by a trusted provider',
+      });
+    }
+    const status = input.status ?? 'requires_provider';
+    const preferences = field.preferences ?? {};
 
     const attempt = await this.paymentAttempts.save(
       this.paymentAttempts.create({
         accountId: submitter.accountId,
         amount: numberValue(preferences.price),
-        completedAt: status === 'succeeded' ? new Date() : null,
+        completedAt: null,
         currency: stringValue(preferences.currency),
         data: input.data ?? {},
         fieldUuid: field.uuid!,
@@ -623,7 +628,12 @@ export class SigningService {
       input.field_uuid,
       'verification',
     );
-    const status = normalizeIdentityStatus(input.status);
+    if (input.status !== undefined && input.status !== 'pending') {
+      throw new UnprocessableEntityException({
+        error: 'Identity verification must be confirmed by a trusted provider',
+      });
+    }
+    const status = 'pending';
 
     const verification = await this.identityVerifications.save(
       this.identityVerifications.create({
@@ -636,7 +646,7 @@ export class SigningService {
         status,
         submissionId: submitter.submissionId,
         submitterId: submitter.id,
-        verifiedAt: status === 'verified' ? new Date() : null,
+        verifiedAt: null,
       }),
     );
 
@@ -1138,71 +1148,38 @@ export class SigningService {
     }
   }
 
-  private async assertRequiredPaymentFieldsComplete(
-    submitter: Submitter,
-  ): Promise<void> {
-    const missingField = await this.findMissingProviderBackedField(
-      submitter,
-      'payment',
-      async (fieldUuid) =>
-        this.paymentAttempts.existsBy({
-          fieldUuid,
-          status: 'succeeded',
-          submitterId: submitter.id,
-        }),
-    );
-
-    if (missingField?.uuid) {
-      throw new UnprocessableEntityException({
-        field_uuid: missingField.uuid,
-        error: 'Complete payment to finish signing',
-      });
-    }
+  private assertRequiredPaymentFieldsComplete(submitter: Submitter): void {
+    this.assertProviderConfigured(submitter, 'payment', 'Payment');
   }
 
-  private async assertRequiredIdentityFieldsComplete(
-    submitter: Submitter,
-  ): Promise<void> {
-    const missingField = await this.findMissingProviderBackedField(
+  private assertRequiredIdentityFieldsComplete(submitter: Submitter): void {
+    this.assertProviderConfigured(
       submitter,
       'verification',
-      async (fieldUuid) =>
-        this.identityVerifications.existsBy({
-          fieldUuid,
-          status: 'verified',
-          submitterId: submitter.id,
-        }),
+      'Identity verification',
     );
-
-    if (missingField?.uuid) {
-      throw new UnprocessableEntityException({
-        field_uuid: missingField.uuid,
-        error: 'Complete identity verification to finish signing',
-      });
-    }
   }
 
-  private async findMissingProviderBackedField(
+  private assertProviderConfigured(
     submitter: Submitter,
     type: string,
-    isComplete: (fieldUuid: string) => Promise<boolean>,
-  ): Promise<TemplateField | null> {
-    for (const field of this.getSubmitterFields(submitter)) {
-      if (
-        field.type !== type ||
-        field.required === false ||
-        field.readonly === true ||
-        !field.uuid
-      ) {
-        continue;
-      }
-
-      if (!(await isComplete(field.uuid))) {
-        return field;
-      }
+    label: string,
+  ): void {
+    const field = this.getSubmitterFields(submitter).find(
+      (candidate) =>
+        candidate.type === type &&
+        candidate.required !== false &&
+        candidate.readonly !== true &&
+        candidate.uuid,
+    );
+    // Historical success rows were writable by public clients. Until an authenticated
+    // provider adapter records verifiable provenance, none can authorize completion.
+    if (field) {
+      throw new UnprocessableEntityException({
+        field_uuid: field.uuid,
+        error: `${label} provider confirmation is not configured`,
+      });
     }
-
-    return null;
   }
 
   private async assertSigningReasonsComplete(
@@ -1575,33 +1552,6 @@ function numberValue(value: unknown): number | null {
 
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
-}
-
-function normalizePaymentStatus(value: string | undefined) {
-  if (
-    value === 'pending' ||
-    value === 'processing' ||
-    value === 'succeeded' ||
-    value === 'failed' ||
-    value === 'cancelled'
-  ) {
-    return value;
-  }
-
-  return 'requires_provider';
-}
-
-function normalizeIdentityStatus(value: string | undefined) {
-  if (
-    value === 'pending' ||
-    value === 'verified' ||
-    value === 'failed' ||
-    value === 'expired'
-  ) {
-    return value;
-  }
-
-  return 'pending';
 }
 
 function toString(value: unknown): string {

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  ServiceUnavailableException,
   Headers,
   Post,
   Query,
@@ -109,6 +110,11 @@ export class SmsProviderEventsController {
     const configuredSecret = this.config.get<string>('SMS_CALLBACK_SECRET');
 
     if (!configuredSecret) {
+      if (!this.config.get<string>('TWILIO_AUTH_TOKEN')) {
+        throw new ServiceUnavailableException({
+          error: 'SMS callback authentication is not configured',
+        });
+      }
       return;
     }
 
@@ -121,14 +127,19 @@ export class SmsProviderEventsController {
     const authToken = this.config.get<string>('TWILIO_AUTH_TOKEN');
     const signature = request.header('x-twilio-signature');
 
-    if (!authToken || !signature || !isRecord(body)) {
-      return;
+    if (!authToken) return;
+    if (!signature || !isRecord(body)) {
+      throw new ForbiddenException({ error: 'Invalid Twilio signature' });
     }
 
-    const publicUrl = this.config.get<string>('PUBLIC_API_URL');
-    const url = publicUrl
-      ? `${publicUrl}${request.originalUrl}`
-      : `${request.protocol}://${request.get('host')}${request.originalUrl}`;
+    const apiBase = this.config.get<string>('API_PUBLIC_URL');
+    const legacyOrigin = this.config.get<string>('PUBLIC_API_URL');
+    const callbackPath = request.originalUrl.slice(
+      request.originalUrl.indexOf('/sms-events/'),
+    );
+    const url = apiBase
+      ? `${apiBase.replace(/\/$/, '')}${callbackPath}`
+      : `${legacyOrigin ?? `${request.protocol}://${request.get('host')}`}${request.originalUrl}`;
 
     if (!twilio.validateRequest(authToken, signature, url, body)) {
       throw new ForbiddenException({ error: 'Invalid Twilio signature' });

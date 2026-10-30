@@ -9,7 +9,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import type { TemplateField } from '../../templates/types/template-json';
 
 export class CreateSubmissionMessageDto {
@@ -239,6 +239,9 @@ export class CreateSubmissionDto {
     description: 'Template id to create the submission from.',
     example: '1000001',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'number' ? String(value) : value,
+  )
   @IsString()
   template_id: string;
 
@@ -248,6 +251,8 @@ export class CreateSubmissionDto {
     type: [CreateSubmissionSubmitterDto],
   })
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateSubmissionSubmitterDto)
   submitters: CreateSubmissionSubmitterDto[];
 
   @ApiPropertyOptional({
@@ -384,6 +389,8 @@ export class CreateSubmissionAliasDto {
   @ApiPropertyOptional({ type: [CreateSubmissionSubmitterDto] })
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateSubmissionSubmitterDto)
   submitters?: CreateSubmissionSubmitterDto[];
 
   @ApiPropertyOptional({ example: 'Test Submission Document' })
@@ -469,5 +476,7 @@ export class CreateSubmissionAliasDto {
 export class CreateSubmissionBatchDto {
   @ApiProperty({ type: [CreateSubmissionDto] })
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateSubmissionDto)
   submissions!: CreateSubmissionDto[];
 }

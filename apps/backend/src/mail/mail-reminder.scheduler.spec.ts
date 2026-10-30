@@ -140,3 +140,65 @@ describe('MailReminderScheduler', () => {
     expect(mailQueue.add).not.toHaveBeenCalled();
   });
 });
+
+describe('reminder scheduling boundaries', () => {
+  function setup(value: unknown = { first_duration: 'one_hour' }, count = 0) {
+    const candidate = {
+      id: 'recipient',
+      accountId: 'organization',
+      sentAt: new Date(Date.now() - 7200000),
+      preferences: { send_email: true },
+    };
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([candidate]),
+    };
+    const configs = {
+      find: jest.fn().mockResolvedValue([{ accountId: 'organization', value }]),
+    };
+    const events = { count: jest.fn().mockResolvedValue(count) };
+    const queue = { add: jest.fn() };
+    const scheduler = new MailReminderScheduler(
+      configs as never,
+      events as never,
+      { createQueryBuilder: () => query } as never,
+      queue as never,
+    );
+    return { scheduler, candidate, configs, events, queue };
+  }
+  it.each([
+    null,
+    [],
+    { first_duration: null },
+    { first_duration: 'unknown_duration' },
+  ])(
+    'does not queue malformed or disabled reminder configurations %#',
+    async (value) => {
+      const { scheduler, queue } = setup(value);
+      await scheduler.enqueueDueReminders();
+      expect(queue.add).not.toHaveBeenCalled();
+    },
+  );
+  it('does not enqueue a reminder before its due time', async () => {
+    const { scheduler, candidate, queue } = setup();
+    candidate.sentAt = new Date();
+    await scheduler.enqueueDueReminders();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+  it('stops after all configured reminder slots have been used', async () => {
+    const { scheduler, queue } = setup({ first_duration: 'one_hour' }, 3);
+    await scheduler.enqueueDueReminders();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+  it('skips accounts with no reminder configuration', async () => {
+    const { scheduler, configs, events, queue } = setup();
+    configs.find.mockResolvedValue([]);
+    await scheduler.enqueueDueReminders();
+    expect(events.count).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+});

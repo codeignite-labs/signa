@@ -1,11 +1,14 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AccountMembershipsService } from './account-memberships.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountMembership } from './entities/account-membership.entity';
 import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AccountMembership]), MailModule],
+  imports: [
+    TypeOrmModule.forFeature([AccountMembership]),
+    forwardRef(() => MailModule),
+  ],
   providers: [AccountMembershipsService],
   exports: [AccountMembershipsService, TypeOrmModule],
 })

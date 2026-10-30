@@ -1,9 +1,15 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { convert } from 'libreoffice-convert';
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type BrowserContext } from 'playwright';
 import { promisify } from 'node:util';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  printTemplateCsp,
+  protectRendererNetwork,
+  rendererContextOptions,
+  rendererCsp,
+} from '../common/rendering/renderer-network';
 import { TemplateField } from './types/template-json';
 
 const convertOfficeDocument = promisify(convert);
@@ -68,18 +74,27 @@ export class DocumentConversionService {
     const browser = await this.launchBrowser();
 
     try {
-      const page = await browser.newPage({
+      const context = await browser.newContext({
+        ...rendererContextOptions,
         viewport: {
           width: size.width,
           height: size.height,
         },
       });
+      const resources = await protectRendererNetwork(context);
+      const page = await context.newPage();
       await page.emulateMedia({ media: 'print' });
+      await this.validatePrintTemplates(
+        context,
+        input,
+        resources.assertAllowed,
+      );
       await page.setContent(this.wrapHtml(input.html), {
         waitUntil: 'networkidle',
         timeout: this.config.get<number>('HTML_TO_PDF_TIMEOUT_MS', 30_000),
       });
 
+      resources.assertAllowed();
       const fields = await page.evaluate(
         ({ pageHeight, pageWidth, tags }) => {
           const entries = Object.entries(tags);
@@ -108,10 +123,8 @@ export class DocumentConversionService {
                 title: attributes.title || undefined,
                 description: attributes.description || undefined,
                 preferences: buildPreferences(attributes),
-                uuid: crypto.randomUUID(),
                 areas: [
                   {
-                    uuid: crypto.randomUUID(),
                     x: clamp(rect.left / pageWidth),
                     y: clamp(topOnPage / pageHeight),
                     w: clamp(rect.width / pageWidth),
@@ -178,14 +191,20 @@ export class DocumentConversionService {
         printBackground: true,
       });
 
+      resources.assertAllowed();
       return {
         filename: ensurePdfFilename(input.name),
         buffer: Buffer.from(buffer),
-        fields,
+        fields: fields.map((field) => ({
+          ...field,
+          uuid: randomUUID(),
+          areas: field.areas.map((area) => ({ ...area, uuid: randomUUID() })),
+        })),
         body: input.html,
         head: input.htmlHeader ?? input.htmlFooter ?? null,
       };
     } catch (error) {
+      if (error instanceof UnprocessableEntityException) throw error;
       throw new UnprocessableEntityException({
         error: `Unable to render HTML document: ${getErrorMessage(error)}`,
       });
@@ -225,11 +244,32 @@ export class DocumentConversionService {
     });
   }
 
-  private wrapHtml(html: string): string {
+  private async validatePrintTemplates(
+    context: BrowserContext,
+    input: HtmlRenderInput,
+    assertAllowed: () => void,
+  ) {
+    for (const template of [input.htmlHeader, input.htmlFooter]) {
+      if (!template) continue;
+      const page = await context.newPage();
+      try {
+        await page.emulateMedia({ media: 'print' });
+        await page.setContent(this.wrapHtml(template, printTemplateCsp), {
+          waitUntil: 'load',
+        });
+        assertAllowed();
+      } finally {
+        await page.close();
+      }
+    }
+  }
+
+  private wrapHtml(html: string, contentPolicy = rendererCsp): string {
     return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${contentPolicy}">
 <style>
   @page { margin: 0; }
   html, body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

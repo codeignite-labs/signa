@@ -10,6 +10,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -228,7 +229,64 @@ export class StorageService {
       `http://localhost:${this.config.get<number>('PORT', 3001)}/api`,
     );
 
-    return `${apiBase}/storage/blobs/${payload}.${signature}/${encodeURIComponent(blob.filename)}`;
+    return `${apiBase.replace(/\/$/, '')}/storage/blobs/${payload}.${signature}/${encodeURIComponent(blob.filename)}`;
+  }
+
+  async readSignedBlobUrl(
+    urlValue: string,
+    maxBytes: number,
+  ): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+  } | null> {
+    const token = this.getOwnSignedBlobToken(urlValue);
+    if (!token) return null;
+    const blob = await this.getBlobForSignedToken(token);
+    if (Number(blob.byteSize) > maxBytes)
+      throw new UnprocessableEntityException({
+        error: 'Attachment exceeds the maximum download size',
+      });
+    const buffer = await this.readBlob(blob);
+    if (buffer.length > maxBytes)
+      throw new UnprocessableEntityException({
+        error: 'Attachment exceeds the maximum download size',
+      });
+    return {
+      buffer,
+      filename: this.getSafeDownloadName(blob),
+      contentType: blob.contentType ?? 'application/octet-stream',
+    };
+  }
+
+  private getOwnSignedBlobToken(urlValue: string): string | null {
+    let url: URL;
+    try {
+      url = new URL(urlValue);
+    } catch {
+      return null;
+    }
+    const apiBase = new URL(
+      this.config.get<string>(
+        'API_PUBLIC_URL',
+        `http://localhost:${this.config.get<number>('PORT', 3001)}/api`,
+      ),
+    );
+    const prefix = `${apiBase.pathname.replace(/\/$/, '')}/storage/blobs/`;
+    if (
+      url.origin !== apiBase.origin ||
+      !url.pathname.startsWith(prefix) ||
+      url.username ||
+      url.password
+    )
+      return null;
+    const parts = url.pathname.slice(prefix.length).split('/');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+    try {
+      return decodeURIComponent(parts[0]);
+    } catch {
+      return null;
+    }
   }
 
   async getBlobForSignedToken(token: string): Promise<StorageBlob> {

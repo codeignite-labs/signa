@@ -18,7 +18,7 @@ describe('runtime options', () => {
 
     expect(options.connection).toEqual({ url: 'redis://queue:6379' });
     expect(options.prefix).toBe('signa-test');
-    expect(options.extraOptions).toEqual({ manualRegistration: false });
+    expect(options.extraOptions).toBeUndefined();
     expect(options.defaultJobOptions).toMatchObject({
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -34,11 +34,11 @@ describe('runtime options', () => {
     });
   });
 
-  it('keeps queue auto-registration disabled until queues are explicitly enabled', () => {
+  it('uses the local Redis default without passing module extras to the async factory', () => {
     const options = createQueueOptions(createConfig({ REDIS_URL: '' }));
 
     expect(options.connection).toEqual({ url: 'redis://localhost:6379' });
-    expect(options.extraOptions).toEqual({ manualRegistration: true });
+    expect(options.extraOptions).toBeUndefined();
   });
 
   it('hides Bull Board when the dashboard is disabled', () => {

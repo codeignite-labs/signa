@@ -166,12 +166,12 @@ export class PdfAcroFormService {
               ? annotation
               : null;
 
-        const parent = annotationDict?.lookupMaybe(
-          PDFName.of('Parent'),
-          PDFRef,
-        );
+        const parent = annotationDict?.get(PDFName.of('Parent'));
 
-        if (parent?.toString() === fieldRef.toString()) {
+        if (
+          parent instanceof PDFRef &&
+          parent.toString() === fieldRef.toString()
+        ) {
           if (seenWidgets === widgetIndex) {
             return pageIndex;
           }

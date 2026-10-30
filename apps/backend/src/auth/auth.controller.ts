@@ -188,7 +188,11 @@ export class AuthController {
     @Req() request: AuthenticatedRequest,
     @Body() body: RotateApiTokenDto,
   ): Promise<ApiTokenRevealResponseDto> {
-    return this.authService.rotateUserApiToken(request.session!.userId, body);
+    return this.authService.rotateUserApiToken(
+      request.session!.userId,
+      body,
+      request.session!.accountId,
+    );
   }
 
   @Patch('api-token/permissions')

@@ -236,7 +236,10 @@ export class WebhooksService {
       statusCode: response.statusCode,
     });
 
-    event.status = response.statusCode >= 400 ? 'error' : 'success';
+    event.status =
+      response.statusCode === 0 || response.statusCode >= 400
+        ? 'error'
+        : 'success';
     await this.webhookEvents.save(event);
     this.realtime.publish({
       account_id: event.accountId,
@@ -381,7 +384,8 @@ export class WebhooksService {
     await this.webhookAttempts.save(
       this.webhookAttempts.create({
         attempt: input.attempt,
-        responseBody: input.statusCode >= 400 ? input.body : null,
+        responseBody:
+          input.statusCode === 0 || input.statusCode >= 400 ? input.body : null,
         responseStatusCode: input.statusCode,
         webhookEventId: event.id,
       }),

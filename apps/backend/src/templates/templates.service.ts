@@ -12,6 +12,7 @@ import sharp from 'sharp';
 import { Brackets, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { AccountsService } from '../accounts/accounts.service';
 import { throwDatabaseErrors, throwIfNotFound } from '../common/utils/error';
+import { downloadPublicDocument } from '../common/http/public-download';
 import { runtimeEvents } from '../runtime/runtime-events';
 import { StorageService } from '../storage/storage.service';
 import { UploadedBufferFile } from '../storage/storage.types';
@@ -217,27 +218,12 @@ export class TemplatesService {
     }
 
     if (input.parent !== undefined) {
-      folder.parentFolder = input.parent.trim()
+      const parent = input.parent.trim()
         ? await this.findOrCreateFolder(user, input.parent)
         : null;
-      folder.parentFolderId = folder.parentFolder?.id ?? null;
-
-      if (folder.parentFolderId === folder.id) {
-        throw new UnprocessableEntityException({
-          error: 'Folder cannot be moved inside itself',
-        });
-      }
-
-      if (
-        folder.parentFolder &&
-        this.getFolderName(folder.parentFolder).startsWith(
-          `${this.getFolderName(folder)} /`,
-        )
-      ) {
-        throw new UnprocessableEntityException({
-          error: 'Folder cannot be moved inside one of its subfolders',
-        });
-      }
+      await this.assertFolderParentAllowed(user, folder, parent);
+      folder.parentFolder = parent;
+      folder.parentFolderId = parent?.id ?? null;
     }
 
     try {
@@ -1191,10 +1177,9 @@ export class TemplatesService {
         }
 
         const [removed] = schema.splice(index, 1);
-        fields = fields.filter((field) =>
-          (field.areas ?? []).every(
-            (area) => area.attachment_uuid !== removed?.attachment_uuid,
-          ),
+        fields = this.removeDocumentFieldAreas(
+          fields,
+          removed?.attachment_uuid,
         );
         continue;
       }
@@ -1339,21 +1324,36 @@ export class TemplatesService {
       ];
     }
 
-    return fields
-      .filter((field) =>
-        (field.areas ?? []).every(
-          (area) => area.attachment_uuid !== previousAttachmentUuid,
+    return fields.map((field) => {
+      const areas = field.areas;
+      if (
+        !areas?.some((area) => area.attachment_uuid === previousAttachmentUuid)
+      ) {
+        return field;
+      }
+      return {
+        ...field,
+        areas: areas.map((area) =>
+          area.attachment_uuid === previousAttachmentUuid
+            ? { ...area, attachment_uuid: nextAttachmentUuid }
+            : area,
         ),
-      )
-      .concat(
-        previousFields.map((field) => ({
-          ...field,
-          areas: (field.areas ?? []).map((area) => ({
-            ...area,
-            attachment_uuid: nextAttachmentUuid,
-          })),
-        })),
+      };
+    });
+  }
+
+  private removeDocumentFieldAreas(
+    fields: TemplateField[],
+    attachmentUuid: string | undefined,
+  ): TemplateField[] {
+    if (!attachmentUuid) return fields;
+    return fields.flatMap((field) => {
+      const remaining = field.areas?.filter(
+        (area) => area.attachment_uuid !== attachmentUuid,
       );
+      if (remaining?.length === field.areas?.length) return [field];
+      return remaining?.length ? [{ ...field, areas: remaining }] : [];
+    });
   }
 
   private async createDynamicDocumentVersion(
@@ -1473,9 +1473,7 @@ export class TemplatesService {
 
     const resolvedDocuments = await Promise.all(
       documents.map(async (document) => {
-        const buffer = await this.resolveDocumentFile(document, {
-          requireHttpsUrl: true,
-        });
+        const buffer = await this.resolveDocumentFile(document);
         this.assertPdf(buffer, document.name, 'application/pdf');
 
         return {
@@ -1559,15 +1557,7 @@ export class TemplatesService {
           throw new UnprocessableEntityException({ error: 'File is missing' });
         }
 
-        const buffer = await this.resolveDocumentFile(
-          {
-            file,
-            name,
-          },
-          {
-            requireHttpsUrl: true,
-          },
-        );
+        const buffer = await this.resolveDocumentFile({ file, name });
 
         if (isDocxFilename(name)) {
           return {
@@ -1904,9 +1894,7 @@ export class TemplatesService {
 
     return Promise.all(
       documents.map(async (document) => {
-        const buffer = await this.resolveDocumentFile(document, {
-          requireHttpsUrl: true,
-        });
+        const buffer = await this.resolveDocumentFile(document);
         return this.resolveDocxBufferDocument({
           buffer,
           fields: document.fields ?? [],
@@ -2001,27 +1989,18 @@ export class TemplatesService {
     );
   }
 
-  private async resolveDocumentFile(
-    document: {
-      file: string;
-      name: string;
-    },
-    options: { requireHttpsUrl?: boolean } = {},
-  ): Promise<Buffer> {
+  private async resolveDocumentFile(document: {
+    file: string;
+    name: string;
+  }): Promise<Buffer> {
     if (isUrl(document.file)) {
-      if (options.requireHttpsUrl && !document.file.startsWith('https://')) {
-        throw new UnprocessableEntityException({
-          error: 'Only HTTPS document URLs are supported',
-        });
-      }
-
-      const response = await fetch(document.file);
-
-      if (!response.ok) {
-        throw new UnprocessableEntityException({
-          error: `Unable to download PDF: ${response.status}`,
-        });
-      }
+      const maxBytes = 50 * 1024 * 1024;
+      const stored = await this.storageService.readSignedBlobUrl(
+        document.file,
+        maxBytes,
+      );
+      if (stored) return stored.buffer;
+      const response = await downloadPublicDocument(document.file, maxBytes);
 
       return Buffer.from(await response.arrayBuffer());
     }
@@ -2406,6 +2385,28 @@ export class TemplatesService {
       created_at: folder.createdAt,
       updated_at: folder.updatedAt,
     };
+  }
+
+  private async assertFolderParentAllowed(
+    user: User,
+    folder: TemplateFolder,
+    parent: TemplateFolder | null,
+  ): Promise<void> {
+    if (!parent) return;
+    if (parent.id === folder.id) {
+      throw new UnprocessableEntityException({
+        error: 'Folder cannot be moved inside itself',
+      });
+    }
+    const descendants = await this.findDescendantFolders(
+      user.accountId,
+      folder.id,
+    );
+    if (descendants.some((descendant) => descendant.id === parent.id)) {
+      throw new UnprocessableEntityException({
+        error: 'Folder cannot be moved inside one of its subfolders',
+      });
+    }
   }
 
   private assertEditableFolder(folder: TemplateFolder): void {
@@ -3072,14 +3073,16 @@ function rewriteSubmitterReference(
 }
 
 function parseContentDispositionFilename(value: string | null): string {
-  if (!value) {
-    return '';
+  if (!value) return '';
+  const extended = value.match(/filename\*\s*=\s*UTF-8'[^']*'([^;]+)/i);
+  if (extended) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      // RFC 6266 permits recovering a usable legacy filename from an invalid header.
+    }
   }
-
-  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
-  const quotedMatch = value.match(/filename="([^"]+)"/i);
-  const plainMatch = value.match(/filename=([^;]+)/i);
-  const filename = utf8Match?.[1] ?? quotedMatch?.[1] ?? plainMatch?.[1] ?? '';
-
-  return filename ? decodeURIComponent(filename.trim()) : '';
+  const quoted = value.match(/filename\s*=\s*"([^"]+)"/i);
+  const plain = value.match(/filename\s*=\s*([^;]+)/i);
+  return (quoted?.[1] ?? plain?.[1] ?? '').trim();
 }
