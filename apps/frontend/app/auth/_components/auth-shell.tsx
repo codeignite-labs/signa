@@ -70,6 +70,8 @@ import {
   type UseFormRegisterReturn,
 } from "react-hook-form";
 
+import { submitPasswordRecovery } from "./auth-recovery";
+
 type AuthShellProps = {
   mode: AuthMode;
 };
@@ -82,6 +84,7 @@ export function AuthShell({ mode }: AuthShellProps) {
   const loader = useTopLoader();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionNotice, setSubmissionNotice] = useState<string | null>(null);
   const [needsOtp, setNeedsOtp] = useState(mode === "otp");
   const [registrationStatus, setRegistrationStatus] =
     useState<RegistrationStatus | null>(null);
@@ -124,6 +127,7 @@ export function AuthShell({ mode }: AuthShellProps) {
     setIsSubmitting(true);
     loader.start();
     form.clearErrors("root");
+    setSubmissionNotice(null);
 
     try {
       if (mode === "login") {
@@ -170,7 +174,10 @@ export function AuthShell({ mode }: AuthShellProps) {
         return;
       }
 
-      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      const recovery = await submitPasswordRecovery(mode, values);
+      setSubmissionNotice(recovery.message);
+      toast.success(recovery.title, { description: recovery.message });
+      if (recovery.redirect) router.replace(recovery.redirect);
     } catch (error) {
       if (isOtpRequiredError(error) && mode === "login") {
         setNeedsOtp(true);
@@ -212,6 +219,7 @@ export function AuthShell({ mode }: AuthShellProps) {
         <h1 className="mt-1 text-center text-4xl font-bold tracking-normal text-[var(--auth-foreground)]">
           {copy.title}
         </h1>
+        {submissionNotice ? <div className="mt-6" role="status"><AuthNotice message={submissionNotice} /></div> : null}
         {mode === "register" && !canRegister ? (
           <RegistrationClosedMessage reason={registrationStatus?.reason} />
         ) : null}
@@ -838,6 +846,8 @@ function getAuthSubmitError(error: unknown, mode: AuthMode): string {
     return "Unable to create your account. Please try again.";
   }
 
+  if (mode === "forgot-password") return "Unable to send a reset link. Please try again.";
+  if (mode === "reset-password") return "Unable to reset your password. Please try again.";
   return "Unable to sign in. Please try again.";
 }
 

@@ -79,6 +79,7 @@ export function SigningPage({
   const [activePanel, setActivePanel] = useState<ActivePanelState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDeclineOpen, setIsDeclineOpen] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRedirectingCompletedForm, setIsRedirectingCompletedForm] =
@@ -190,13 +191,21 @@ export function SigningPage({
   }
 
   async function declineForm() {
-    const declinedForm = await declineSigningForm(slug);
-
-    setForm(declinedForm);
-    setActivePanel(null);
-    setIsDeclineOpen(false);
-    postSignaEmbedEvent("declined", declinedForm);
-    toast.success("Document declined");
+    setIsDeclining(true);
+    try {
+      const declinedForm = await declineSigningForm(slug);
+      setForm(declinedForm);
+      setActivePanel(null);
+      setIsDeclineOpen(false);
+      postSignaEmbedEvent("declined", declinedForm);
+      toast.success("Document declined");
+    } catch (declineError) {
+      toast.error("Document could not be declined", {
+        description: declineError instanceof Error ? declineError.message : "Please try again.",
+      });
+    } finally {
+      setIsDeclining(false);
+    }
   }
 
   async function downloadDocuments() {
@@ -387,10 +396,14 @@ export function SigningPage({
             complete this document from this session afterward.
           </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeclining}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => void declineForm()}
+              disabled={isDeclining}
+              onClick={(event) => {
+                event.preventDefault();
+                void declineForm();
+              }}
             >
               Decline document
             </AlertDialogAction>
@@ -910,7 +923,7 @@ function getNextPanelState(
     .slice(Math.max(currentIndex + 1, 0))
     .find((field) => !field.readonly);
 
-  return nextField ? { field: nextField, mode: "field" } : null;
+  return nextField ? { field: nextField, mode: "field" } : getInitialPanelState(form);
 }
 
 function areaToStyle(area: { h?: number; w?: number; x?: number; y?: number }) {

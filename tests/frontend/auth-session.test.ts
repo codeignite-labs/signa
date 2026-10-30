@@ -175,3 +175,21 @@ it("replaces the tenant session when entering/leaving test mode and clears it wh
   await auth.deleteAccount();
   expect(auth.getAuthSession()).toBeNull();
 });
+
+it("does not restore a stale account or profile after logout races a pending update", async () => {
+  for (const update of [
+    () => auth.updateProfile({ first_name: "Changed" }),
+    () => auth.updateAccount({ name: "Changed" }),
+  ]) {
+    auth.saveAuthSession(session());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => {
+        auth.clearAuthSession();
+        return new Response('{"id":"changed"}');
+      }),
+    );
+    await update();
+    expect(auth.getAuthSession()).toBeNull();
+  }
+});

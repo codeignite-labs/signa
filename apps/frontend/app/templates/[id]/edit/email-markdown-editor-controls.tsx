@@ -8,7 +8,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -147,17 +147,23 @@ export function VariableMenu({
 }
 
 function VariableMenuTrigger({
-  disabled,
   onOpen,
-}: {
-  disabled: boolean;
-  onOpen: () => void;
-}) {
+  onPointerDown,
+  onKeyDown,
+  ...buttonProps
+}: ComponentProps<typeof Button> & { onOpen: () => void }) {
   return (
     <Button
+      {...buttonProps}
       className="h-8 rounded-full px-3 text-xs"
-      disabled={disabled}
-      onPointerDown={onOpen}
+      onPointerDown={(event) => {
+        onOpen();
+        onPointerDown?.(event);
+      }}
+      onKeyDown={(event) => {
+        if (["Enter", " ", "ArrowDown"].includes(event.key)) onOpen();
+        onKeyDown?.(event);
+      }}
       type="button"
       variant="ghost"
     >

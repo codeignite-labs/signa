@@ -1,5 +1,5 @@
-import { AuthShell } from "../_components/auth-shell"
+import { redirect } from "next/navigation";
 
 export default function OtpPage() {
-  return <AuthShell mode="otp" />
+  redirect("/auth/login");
 }

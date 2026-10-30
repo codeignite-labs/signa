@@ -182,7 +182,21 @@ export function SubmissionDetailPage({ submissionId }: SubmissionDetailPageProps
       return
     }
 
-    await navigator.clipboard.writeText(`${window.location.origin}/s/${submitter.slug}`)
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard access is unavailable in this browser.")
+      }
+      await navigator.clipboard.writeText(`${window.location.origin}/s/${submitter.slug}`)
+      markShareLinkCopied()
+    } catch (error) {
+      setIsShareLinkCopied(false)
+      toast.error("Share link could not be copied", {
+        description: error instanceof Error ? error.message : "Try copying the link again.",
+      })
+    }
+  }
+
+  function markShareLinkCopied() {
     setIsShareLinkCopied(true)
 
     if (copyResetTimeoutRef.current) {

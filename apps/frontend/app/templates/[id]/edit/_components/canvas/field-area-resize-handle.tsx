@@ -8,7 +8,7 @@ export function FieldAreaResizeHandle({
   title,
   updateInteraction,
 }: {
-  finishInteraction: () => void;
+  finishInteraction: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   startResize: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   title: string;
   updateInteraction: (event: ReactPointerEvent<HTMLButtonElement>) => void;

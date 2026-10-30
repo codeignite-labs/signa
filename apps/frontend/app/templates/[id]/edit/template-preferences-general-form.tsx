@@ -114,7 +114,7 @@ function DefaultExpirationField({
             })
           }
         >
-          <SelectTrigger className="!h-12 w-full rounded-full border-[var(--auth-input-border)] px-5">
+          <SelectTrigger aria-label="Default expiration" className="!h-12 w-full rounded-full border-[var(--auth-input-border)] px-5">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -170,7 +170,7 @@ function FormPreferencesSection({
               })
             }
           >
-            <SelectTrigger className="h-12 rounded-full">
+            <SelectTrigger aria-label="Account owner auto-sign" className="h-12 rounded-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -545,7 +545,7 @@ function PreferenceSwitch({
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl px-1 py-2">
       <span className="text-sm font-medium">{label}</span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch aria-label={label} checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }

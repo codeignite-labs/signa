@@ -293,7 +293,7 @@ function TemplatesDashboard() {
 
       toast.error(text.toasts.loadingFailed, { description: message });
     } finally {
-      if (isCurrentLoad(loadSequenceRef, loadSequence) && !options.silent) {
+      if (isCurrentLoad(loadSequenceRef, loadSequence)) {
         setIsLoading(false);
       }
     }
