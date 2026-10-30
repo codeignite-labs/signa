@@ -306,3 +306,68 @@ it('updates TSA settings and delegates account-scoped trust-root operations', as
     id: 'root',
   });
 });
+
+it('rejects identity mutations if the account no longer exists', async () => {
+  const { service, accounts, encrypted } = setup();
+  accounts.findOne.mockResolvedValue(null);
+  await expect(
+    service.deleteSigningCertificate('tenant', 'Retired'),
+  ).rejects.toMatchObject({ status: 404, message: 'Account not found' });
+  expect(accounts.findOne).toHaveBeenCalledWith({
+    where: { id: 'tenant' },
+    lock: { mode: 'pessimistic_write' },
+  });
+  expect(encrypted.remove).not.toHaveBeenCalled();
+  expect(encrypted.save).not.toHaveBeenCalled();
+});
+
+it('treats the generated identity as active when a legacy account has no selection pointer', async () => {
+  const { service, rows, encrypted } = setup();
+  const key = `${signingCertificatePrefix}${signaDefaultCertificateName}`;
+  rows.set(
+    `tenant/${key}`,
+    Object.assign(new EncryptedConfig(), {
+      accountId: 'tenant',
+      key,
+      value: JSON.stringify(identity),
+    }),
+  );
+  await expect(
+    service.deleteSigningCertificate('tenant', signaDefaultCertificateName),
+  ).rejects.toMatchObject({
+    status: 409,
+    message: 'Activate another signing certificate before removing this one',
+  });
+  expect(rows.has(`tenant/${key}`)).toBe(true);
+  expect(encrypted.remove).not.toHaveBeenCalled();
+});
+
+it('keeps the generated fallback identity after activating an uploaded replacement', async () => {
+  const { service, rows, encrypted } = setup();
+  const key = `${signingCertificatePrefix}${signaDefaultCertificateName}`;
+  rows.set(
+    `tenant/${key}`,
+    Object.assign(new EncryptedConfig(), {
+      accountId: 'tenant',
+      key,
+      value: JSON.stringify(identity),
+    }),
+  );
+  await service.uploadSigningCertificate(
+    'tenant',
+    'Replacement',
+    certificateFile,
+  );
+  await service.makeDefaultSigningCertificate('tenant', 'Replacement');
+  await expect(
+    service.deleteSigningCertificate('tenant', signaDefaultCertificateName),
+  ).rejects.toMatchObject({
+    status: 409,
+    message: 'The generated signing identity cannot be removed',
+  });
+  expect(rows.has(`tenant/${key}`)).toBe(true);
+  expect(rows.get(`tenant/${defaultSigningCertificateKey}`)?.value).toBe(
+    'Replacement',
+  );
+  expect(encrypted.remove).not.toHaveBeenCalled();
+});

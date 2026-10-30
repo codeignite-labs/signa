@@ -8,11 +8,11 @@ following the measurement foundation in [#15](https://github.com/codeignite-labs
 The overall [#14](https://github.com/codeignite-labs/signa/issues/14) tracking issue
 closes through the implementation PR when it merges.
 
-Complete reports measured on 2026-10-31:
+Complete reports measured on 2026-10-31 (backend with the configured local PostgreSQL service mode used by CI):
 
 | Scope                 | Tests | Statements | Branches | Functions |  Lines |
 | --------------------- | ----: | ---------: | -------: | --------: | -----: |
-| Backend               | 1,894 |     98.18% |   95.10% |    98.31% | 98.22% |
+| Backend               | 1,899 |     98.21% |   95.13% |    98.36% | 98.24% |
 | Frontend              | 1,342 |     97.41% |   95.03% |    96.68% | 97.39% |
 | SDKs, separate report |    22 |     99.68% |   99.65% |      100% | 99.67% |
 
