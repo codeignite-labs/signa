@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
 [![Application release](https://img.shields.io/github/v/release/codeignite-labs/signa?filter=v*)](https://github.com/codeignite-labs/signa/releases)
+[![App coverage gate](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main&label=App%20coverage%20%E2%89%A595%25)](./TESTING.md)
 [![SDK coverage gate](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main&label=SDK%20coverage%20%E2%89%A595%25)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
 [![Platform license](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](./LICENSING.md)
 [![React SDK](https://img.shields.io/npm/v/%40signajs%2Freact?label=React%20SDK)](https://www.npmjs.com/package/@signajs/react)
@@ -48,10 +49,10 @@ cd signa
 ## Tests and coverage
 
 Run `pnpm test:frontend:coverage` and `pnpm test:backend:coverage` for complete
-main-app reports. The application-wide 95% goal remains in progress; current
-coverage is substantially below it. See [TESTING.md](./TESTING.md) for measured
-baselines, regression floors and feature-area priorities. The SDK coverage badge
-above refers only to the independent SDK gate.
+main-app reports. CI enforces at least 95% statements, branches, functions and
+lines for each application. See [TESTING.md](./TESTING.md) for dated measurements,
+source inclusion, the explicit backend instrumentation correction and test
+limitations. SDK coverage remains independently gated per runtime file.
 
 ## Local Development
 
@@ -79,16 +80,16 @@ do not require an authenticated product account:
 
 Production documentation: [https://signa-docs.vercel.app](https://signa-docs.vercel.app)
 
-| Route                                                                                                               | Purpose                                                                    |
-| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`/docs`](https://signa-docs.vercel.app/docs)                                                                       | Documentation home and navigation.                                         |
-| [`/docs/api`](https://signa-docs.vercel.app/docs/api)                                                               | Curated API onboarding, endpoint contracts, examples, and response shapes. |
-| [`/docs/embedding`](https://signa-docs.vercel.app/docs/embedding)                                                   | React and React Native embedding guidance.                                 |
-| [`/docs/webhooks`](https://signa-docs.vercel.app/docs/webhooks)                                                     | Webhook registration, events, retries, and signature verification.         |
-| [`/guides`](https://signa-docs.vercel.app/guides)                                                                   | End-to-end signing, template, verification, and deployment guides.         |
-| [`/resources`](https://signa-docs.vercel.app/resources)                                                             | Operational references for teams, branding, integrations, and storage.     |
-| [`/compliance`](https://signa-docs.vercel.app/compliance)                                                           | Audit, certificate, PAdES, timestamp, and LTV controls.                    |
-| [`/qualified-electronic-signature`](https://signa-docs.vercel.app/qualified-electronic-signature)                   | Signature levels and external qualified trust-provider requirements.       |
+| Route                                                                                             | Purpose                                                                    |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`/docs`](https://signa-docs.vercel.app/docs)                                                     | Documentation home and navigation.                                         |
+| [`/docs/api`](https://signa-docs.vercel.app/docs/api)                                             | Curated API onboarding, endpoint contracts, examples, and response shapes. |
+| [`/docs/embedding`](https://signa-docs.vercel.app/docs/embedding)                                 | React and React Native embedding guidance.                                 |
+| [`/docs/webhooks`](https://signa-docs.vercel.app/docs/webhooks)                                   | Webhook registration, events, retries, and signature verification.         |
+| [`/guides`](https://signa-docs.vercel.app/guides)                                                 | End-to-end signing, template, verification, and deployment guides.         |
+| [`/resources`](https://signa-docs.vercel.app/resources)                                           | Operational references for teams, branding, integrations, and storage.     |
+| [`/compliance`](https://signa-docs.vercel.app/compliance)                                         | Audit, certificate, PAdES, timestamp, and LTV controls.                    |
+| [`/qualified-electronic-signature`](https://signa-docs.vercel.app/qualified-electronic-signature) | Signature levels and external qualified trust-provider requirements.       |
 
 The generated NestJS OpenAPI explorer remains available at `/api/docs`. Use
 the [public API guide](https://signa-docs.vercel.app/docs/api) for guided
@@ -297,7 +298,7 @@ DATABASE_URL=postgresql://signa:password@database.example.com:5432/signa
 | `SQLITE_DATABASE_PATH`    | No       | `/data/signa.sqlite`  | SQLite file path inside the container.                                                     |
 | `SQLITE_SYNCHRONIZE`      | No       | `true`                | TypeORM synchronize for SQLite quick starts. Disable for controlled production migrations. |
 | `DATABASE_URL`            | Optional | empty                 | PostgreSQL URL. If set, PostgreSQL is used.                                                |
-| `DATABASE_SSL`            | Optional | `false`               | Encrypts PostgreSQL traffic without requiring a custom CA certificate.                      |
+| `DATABASE_SSL`            | Optional | `false`               | Encrypts PostgreSQL traffic without requiring a custom CA certificate.                     |
 | `DATABASE_MIGRATIONS_RUN` | Optional | `true` for PostgreSQL | Runs TypeORM migrations on container start.                                                |
 
 PostgreSQL example:
@@ -503,21 +504,21 @@ Existing `MAIL_*` variables remain supported as compatibility aliases.
 
 Social login OAuth credentials:
 
-| Variable                       | Required | Description                                                                               |
-| ------------------------------ | -------- | ----------------------------------------------------------------------------------------- |
-| `GOOGLE_AUTH_CLIENT_ID`        | Optional | Google OAuth client ID for Sign in with Google.                                           |
-| `GOOGLE_AUTH_CLIENT_SECRET`    | Optional | Google OAuth client secret for backend code exchange.                                     |
-| `GOOGLE_AUTH_REDIRECT_URI`     | Optional | Frontend callback URL, for example `http://localhost:3000/auth/oauth/google/callback`.    |
+| Variable                    | Required | Description                                                                            |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `GOOGLE_AUTH_CLIENT_ID`     | Optional | Google OAuth client ID for Sign in with Google.                                        |
+| `GOOGLE_AUTH_CLIENT_SECRET` | Optional | Google OAuth client secret for backend code exchange.                                  |
+| `GOOGLE_AUTH_REDIRECT_URI`  | Optional | Frontend callback URL, for example `http://localhost:3000/auth/oauth/google/callback`. |
 
 Register the exact redirect URLs above with each provider. The backend creates the authorization URL, validates signed `state` and `nonce`, exchanges the code server-side, validates the provider ID token, then returns the normal Signa session.
 
 Server-side OAuth credentials:
 
-| Variable                        | Required | Description                      |
-| ------------------------------- | -------- | -------------------------------- |
-| `GMAIL_OAUTH_CLIENT_ID`         | Optional | Gmail OAuth client ID.           |
-| `GMAIL_OAUTH_CLIENT_SECRET`     | Optional | Gmail OAuth client secret.       |
-| `GMAIL_OAUTH_REDIRECT_URI`      | Optional | Frontend Gmail callback URL.     |
+| Variable                    | Required | Description                  |
+| --------------------------- | -------- | ---------------------------- |
+| `GMAIL_OAUTH_CLIENT_ID`     | Optional | Gmail OAuth client ID.       |
+| `GMAIL_OAUTH_CLIENT_SECRET` | Optional | Gmail OAuth client secret.   |
+| `GMAIL_OAUTH_REDIRECT_URI`  | Optional | Frontend Gmail callback URL. |
 
 Google Drive Picker frontend build-time credentials:
 
@@ -539,6 +540,16 @@ Configure the OAuth client and API key in Google Cloud Console, enable Google Pi
 | `TWILIO_MESSAGING_SERVICE_SID` | Optional | Twilio Messaging Service for SMS invitations. |
 | `TWILIO_FROM_PHONE`            | Optional | Fallback Twilio sender number.                |
 | `SMS_CALLBACK_SECRET`          | Optional | Secret for SMS provider callbacks.            |
+
+### Provider callback authentication
+
+Incoming delivery callbacks are disabled (`503`) until authentication is configured. Set `TWILIO_AUTH_TOKEN` for signed Twilio status callbacks, and configure `API_PUBLIC_URL` to the externally reachable API base including `/api`. Set `MAILGUN_WEBHOOK_SIGNING_KEY` to the HTTP webhook signing key for Mailgun events. For other normalized email providers, configure `MAIL_CALLBACK_SECRET` and send it as `x-signa-callback-secret` or the `secret` query parameter. `SMS_CALLBACK_SECRET` provides an additional SMS callback secret. Every configured authentication check must pass.
+
+Mailgun signatures must be at most 24 hours old, with up to five minutes of future clock skew. Signed Mailgun processing requires PostgreSQL: the `mailgun_webhook_receipts` migration stores token and payload SHA-256 digests plus an indexed expiry, without raw tokens or callback bodies. Receipt claims and email events commit together. Concurrent identical retries receive success without duplicate events; a token reused for changed content is rejected. Expired receipts are removed during authenticated processing. Apply database migrations before enabling callbacks.
+
+Email delivery diagnostics at `/api/email-events/messages` and `/api/email-events/messages/:id/events` require an organization administrator web session and remain scoped to its active account.
+
+Protocol references: [Twilio request validation](https://www.twilio.com/docs/usage/security), [Mailgun webhook authentication](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/securing-webhooks).
 
 ### Webhook Env Vars
 
@@ -574,7 +585,7 @@ Configure the OAuth client and API key in Google Cloud Console, enable Google Pi
 | `PDF_LTV_REQUIRED`              | No              | `false`              | When `true`, completed PDF signing fails if OCSP/CRL evidence cannot be collected and embedded into DSS/VRI.                                     |
 | `PDF_LTV_HTTP_TIMEOUT_MS`       | No              | `10000`              | Timeout for OCSP/CRL revocation evidence HTTP requests.                                                                                          |
 | `PDF_A_ENABLED`                 | No              | `false`              | Enables pre-signing PDF/A conversion through an external Ghostscript-compatible binary.                                                          |
-| `PDF_A_REQUIRED`                | No              | `false`              | When `true`, completed PDF signing fails if PDF/A conversion fails.                                                                              |
+| `PDF_A_REQUIRED`                | No              | `false`              | When `true`, completed PDF signing requires enabled PDF/A conversion and a successful veraPDF conformance report.                                |
 | `PDF_A_LEVEL`                   | No              | `2b`                 | Requested PDF/A level: `1b`, `2b`, or `3b`.                                                                                                      |
 | `PDF_A_GHOSTSCRIPT_PATH`        | No              | `gs`                 | Ghostscript executable used for PDF/A conversion.                                                                                                |
 | `PDF_A_VERAPDF_PATH`            | No              | `verapdf`            | Optional veraPDF executable used for PDF/A validation after conversion.                                                                          |
@@ -583,6 +594,8 @@ Configure the OAuth client and API key in Google Cloud Console, enable Google Pi
 | `HTML_TO_PDF_TIMEOUT_MS`        | No              | `30000`              | HTML-to-PDF render timeout.                                                                                                                      |
 | `THROTTLE_TTL_MS`               | No              | `60000`              | API rate-limit window.                                                                                                                           |
 | `THROTTLE_LIMIT`                | No              | `120`                | API rate-limit request count.                                                                                                                    |
+
+HTML and XFA Chromium rendering supports self-contained assets and public HTTPS images, styles and fonts on port 443. Remote resources use the DNS-pinned download transport; private networks, redirects, credentials, active content and nested documents are blocked. Each resource is limited to 5 MiB, with a 25 MiB total, 64 requests and a shared 15-second network deadline per render. A blocked or unavailable resource fails conversion with HTTP 422. JavaScript and service workers are disabled. Print headers and footers must use inline styles and embedded data URI images/fonts; external print assets fail validation. Embed private logos as data URIs rather than linking internal services.
 
 ## PDF Signing, Verification, and Validation
 
@@ -713,7 +726,7 @@ Implemented:
 
 Still tracked as hardening work:
 
-- Optional pre-signing PDF/A conversion through Ghostscript and optional veraPDF validation. This is disabled by default and fails open unless `PDF_A_REQUIRED=true`.
+- Optional pre-signing PDF/A conversion through Ghostscript and optional veraPDF validation. This is disabled by default. `PDF_A_REQUIRED=true` requires conversion to be enabled and veraPDF to confirm conformance before signing.
 - More exhaustive OCSP responder-chain validation.
 - Full HexaPDF/PDFium-grade flattening for every PDF edge case.
 
@@ -725,7 +738,7 @@ PDF/A compliance is handled before cryptographic signing:
 visual stamping -> optional PDF/A conversion/validation -> PAdES CMS signature -> DSS/VRI evidence append -> optional RFC3161 DocTimeStamp
 ```
 
-This order is intentional. PDF/A conversion rewrites PDF structure, so it must happen before the final PAdES signature. Signa records conversion and validation metadata on completed-document artifacts. If Ghostscript or veraPDF is not installed and `PDF_A_REQUIRED=false`, signing continues with `conversionStatus=unavailable`; regulated deployments should install those binaries and set `PDF_A_REQUIRED=true`.
+This order is intentional. PDF/A conversion rewrites PDF structure, so it must happen before the final PAdES signature. Signa records conversion and validation metadata on completed-document artifacts. If Ghostscript or veraPDF is not installed and `PDF_A_REQUIRED=false`, signing continues with `conversionStatus=unavailable`; deployments requiring pre-signing PDF/A validation should install both binaries, enable PDF/A conversion and set `PDF_A_REQUIRED=true`. This validates the converted input; final signed artifacts are not independently revalidated by veraPDF.
 
 References:
 
@@ -755,7 +768,7 @@ These are read when `next build` runs. Rebuild the Docker image after changing t
 | Variable                             | Required | Default                            | Description                                                                                                                  |
 | ------------------------------------ | -------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_API_BASE_URL`           | No       | empty                              | Empty uses same-origin `/api` and is recommended. Set only when the API is intentionally hosted on a separate public origin. |
-| `NEXT_PUBLIC_MARKETING_URL`          | No       | `http://localhost:3002`            | Standalone marketing and documentation origin used by legacy product redirects.                                             |
+| `NEXT_PUBLIC_MARKETING_URL`          | No       | `http://localhost:3002`            | Standalone marketing and documentation origin used by legacy product redirects.                                              |
 | `NEXT_PUBLIC_SIGNING_BASE_URL`       | No       | `http://localhost:3000` in Compose | Public signing-page origin, useful for QR signing links.                                                                     |
 | `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID` | Optional | empty                              | Browser Google OAuth client ID.                                                                                              |
 | `NEXT_PUBLIC_GOOGLE_PICKER_API_KEY`  | Optional | empty                              | Google Picker API key.                                                                                                       |
@@ -778,13 +791,13 @@ pnpm dev:marketing
 The marketing workspace uses Supabase for newsletter subscriptions and future
 licensing records:
 
-| Variable                               | Required | Description                                                                                   |
-| -------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `VERCEL_PROJECT_PRODUCTION_URL`        | Vercel   | System-provided production domain used as the canonical marketing and documentation origin on Vercel.                    |
-| `NEXT_PUBLIC_MARKETING_URL`            | Fallback | Public origin used locally and on non-Vercel deployments. Use `https://signa-docs.vercel.app` in production.              |
-| `NEXT_PUBLIC_APP_URL`                  | Yes      | Product application origin used by sign-in and console links.                                 |
-| `SUPABASE_URL`                         | Newsletter | Server-side Supabase project URL for marketing data.                                        |
-| `SUPABASE_SECRET_KEY`                  | Newsletter | Server-only secret used by the newsletter Route Handler. Never expose this value to browsers. |
+| Variable                        | Required   | Description                                                                                                  |
+| ------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
+| `VERCEL_PROJECT_PRODUCTION_URL` | Vercel     | System-provided production domain used as the canonical marketing and documentation origin on Vercel.        |
+| `NEXT_PUBLIC_MARKETING_URL`     | Fallback   | Public origin used locally and on non-Vercel deployments. Use `https://signa-docs.vercel.app` in production. |
+| `NEXT_PUBLIC_APP_URL`           | Yes        | Product application origin used by sign-in and console links.                                                |
+| `SUPABASE_URL`                  | Newsletter | Server-side Supabase project URL for marketing data.                                                         |
+| `SUPABASE_SECRET_KEY`           | Newsletter | Server-only secret used by the newsletter Route Handler. Never expose this value to browsers.                |
 
 Newsletter schema changes live in `apps/marketing/supabase/migrations`. The
 subscriber table enables RLS and grants no public table access; only the
@@ -849,3 +862,11 @@ For production without Docker, run Redis separately and set
 `QUEUE_ENABLED=true` plus `REDIS_URL`. The frontend exposes the public
 same-origin `/api` route and proxies it to `INTERNAL_API_URL`, so browsers do
 not need direct access to backend port `3001`.
+
+### Provider-backed signing fields
+
+Required payment and identity-verification fields block completion until trusted
+server-side provider adapters are implemented and configured. Public clients can record pending
+attempts; they cannot mark payment or identity verification as successful.
+Historical client-writable success records cannot authorize completion. Optional
+and read-only fields retain their existing completion behavior.

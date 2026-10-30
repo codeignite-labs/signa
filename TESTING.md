@@ -1,28 +1,50 @@
 # Testing Signa
 
-## Coverage goals and current scope
+## Coverage gates and measured scope
 
-[Issue #14](https://github.com/codeignite-labs/signa/issues/14) tracks the
-approximately 95% main-app coverage goal. It is **not yet achieved**. The first
-foundation batch is tracked in
-[issue #15](https://github.com/codeignite-labs/signa/issues/15).
+Both main applications enforce **95% statements, branches, functions and lines**
+in CI. The implementation is tracked by [#17](https://github.com/codeignite-labs/signa/issues/17),
+following the measurement foundation in [#15](https://github.com/codeignite-labs/signa/issues/15).
+The overall [#14](https://github.com/codeignite-labs/signa/issues/14) tracking issue
+closes through the implementation PR when it merges.
 
-Baseline measured on 2026-10-31:
+Complete reports measured on 2026-10-31:
 
-| Scope                                    | Statements | Branches | Functions |  Lines |
-| ---------------------------------------- | ---------: | -------: | --------: | -----: |
-| Backend, 240 existing unit tests         |     43.57% |   36.82% |    41.62% | 43.48% |
-| Full frontend, first 70 regression tests |      3.18% |    3.46% |     1.62% |  3.21% |
+| Scope                 | Tests | Statements | Branches | Functions |  Lines |
+| --------------------- | ----: | ---------: | -------: | --------: | -----: |
+| Backend               | 1,894 |     98.18% |   95.10% |    98.31% | 98.22% |
+| Frontend              | 1,342 |     97.41% |   95.03% |    96.68% | 97.39% |
+| SDKs, separate report |    22 |     99.68% |   99.65% |      100% | 99.67% |
 
-These are dated baseline measurements, not live badges. CI artifacts contain the
-current results. The frontend previously had no automated component/unit suite;
-70 new tests do not establish application-wide coverage. SDK coverage and its
-95% per-runtime-file gate remain separate.
+These are dated measurements. CI uploads the current JSON, LCOV and HTML reports.
+SDK gates remain independent and apply per runtime file.
 
-Backend uses Jest/Istanbul after TypeScript transformation; frontend uses
-Vitest/V8 with source mapping. Keep providers and source inclusion stable when
-comparing baselines. Do not compare a Jest V8 fallback report that counts
-unimported TypeScript source lines with this executable-code baseline.
+The historical foundation measured backend emitted-JavaScript coverage at
+43.57% statements / 36.82% branches / 41.62% functions / 43.48% lines, and the
+first 70 frontend tests at 3.18% / 3.46% / 1.62% / 3.21%, respectively. Backend
+instrumentation changed explicitly in [#52](https://github.com/codeignite-labs/signa/issues/52);
+its old and new percentages are **not directly comparable**. Frontend still uses
+Vitest/V8, and backend still uses Jest/Istanbul. Source collection remains broad.
+
+The backend transformer instruments authored TypeScript before compilation.
+TypeScript adds decorator metadata fallbacks and property assignments that are
+not authored branches; instrumenting them attributed unreachable misses to
+constructor type annotations. The transformer uses Jest's supported
+`canInstrument` contract, Istanbul's TypeScript parser and composed source maps.
+It does not remove runtime paths or manufacture covered outcomes. Four
+regressions verify retained Nest dependency metadata, both outcomes of an
+authored conditional, an intentionally untested outcome, zero counters for
+unexecuted source and the real compiler pipeline. Run them with
+`pnpm --filter backend test:coverage-tools`; CI runs this before backend coverage.
+See [Jest code transformation](https://jestjs.io/docs/code-transformation) and
+[Istanbul's instrumenter API](https://github.com/istanbuljs/istanbuljs/blob/main/packages/istanbul-lib-instrument/api.md).
+
+Functions sent through `page.evaluate` execute outside Node. Real browser tests
+use a test-only bridge to initialize the same authored counter maps in Chromium
+and merge actual executions with `istanbul-lib-coverage`. Regressions check
+independent files, exact counts across repeated calls, untaken branches remaining
+zero and subsequent Node execution. Synthetic fixture maps are cleaned up;
+application code contains no coverage workaround or ignored browser functions.
 
 ## Run the tests
 
@@ -36,6 +58,11 @@ pnpm test:backend:coverage
 pnpm test:sdk:coverage
 ```
 
+The backend coverage command uses two workers and recycles a worker after its
+idle heap exceeds 768 MB. A full run in one retained process exceeded Node's
+4 GB default heap after the suite expanded; this bounds runner memory without
+changing coverage scope. See [Jest worker memory configuration](https://jestjs.io/docs/30.0/configuration#workeridlememorylimit-numberstring).
+
 Backend coverage requires the same OpenSSL and matching Playwright Chromium
 runtime as backend unit tests. Install Chromium with:
 
@@ -43,12 +70,19 @@ runtime as backend unit tests. Install Chromium with:
 pnpm --filter backend exec playwright install chromium
 ```
 
-On a clean Linux CI runner, use `--with-deps` as the workflow does. Backend HTTP
-membership tests additionally require an isolated PostgreSQL database with
-migrations applied. Never point tests at production databases or delivery
-services. CI uses an ephemeral PostgreSQL service and synthetic fixtures.
+On a clean Linux CI runner, use `--with-deps` as the workflow does. Backend application HTTP and migration tests create a randomly named disposable
+PostgreSQL database, run the real migrations and drop only that database afterward.
+Set `TEST_DATABASE_ADMIN_URL` (or the CI `DATABASE_URL`) to a local PostgreSQL
+administrator with database-creation privileges. Remote hosts are rejected. If
+neither variable is set, the fixture starts its own temporary PostgreSQL 16
+cluster using `/usr/lib/postgresql/16/bin`; set `PG_BIN` for another local binary
+directory. The configured administrator database is never migrated or dropped.
 
-## Denominators and regression floors
+Never point tests at production databases or delivery services. Actual HTTP
+workflows use synthetic identities and files, isolated storage, disabled mail
+and recording queue adapters. CI uses an ephemeral PostgreSQL service.
+
+## Denominators and enforced thresholds
 
 The frontend report includes **all** TypeScript/TSX runtime files under
 `apps/frontend/app`, `components`, and `lib`, including modules no test imports.
@@ -58,13 +92,15 @@ marketing app, generated Next output or the development browser-agent tooling.
 The backend retains its existing full-source collection glob. Jest excludes test
 files; report entries include controllers, services, entities, wiring and
 migrations even when unexecuted. No backend feature directories are hidden to
-improve coverage. PostgreSQL HTTP tests and migration checks remain additional
-checks; their coverage is not merged into this unit-test report.
+improve coverage. The disposable-database application HTTP and migration specs run inside this
+Jest suite, so their executed application code contributes to its report. The
+separate membership end-to-end command remains an additional check.
 
-Global minimums are initially pinned just below the measured baseline to prevent
-regression while feature-area batches increase coverage. These floors are
-**not** the 95% completion criterion. They must increase as meaningful tests are
-added; do not lower them or shrink the source denominator to pass CI.
+Both application reports enforce 95% for all four metrics. Keep all runtime
+paths included, including unimported modules. Do not lower thresholds, add ignore
+comments, call unreachable private methods or invent invalid producer outputs to
+make a report pass. An intentionally incomplete backend test selection was also
+checked to fail all four global gates.
 
 In addition, the HTTP client, authentication route guard, auth form validation
 and tenant branding cache already have 95% minimums for all four metrics. They
@@ -72,7 +108,7 @@ currently report 100%. Their coverage does not stand in for coverage of the
 whole app. Browser APIs and fetch responses are controlled at the boundary;
 production functions execute normally.
 
-## What the first frontend tests verify
+## Regression coverage
 
 - Browser/server API URL resolution, explicit locale/timezone headers, file
   uploads, empty responses, structured/non-JSON errors and network failures.
@@ -84,24 +120,24 @@ production functions execute normally.
   values, storage failures and public-data-only serialization.
 - Auth form validation and field-level error paths.
 
-These are component/unit tests, not a full signing browser UAT, physical Android/
-iOS coverage, performance measurement or a regulatory compliance certificate.
+Component, service and focused HTTP/browser integration tests do not establish
+a full signing browser UAT, physical Android/iOS coverage, load capacity or a
+regulatory compliance certificate.
 
-## Next coverage batches
+## Maintaining coverage
 
-Prioritize security and signing behavior, with dedicated assigned issues and
-focused PRs linked back to #14:
+Coverage includes authentication and account permissions; team/user imports and
+concurrent role changes; template editing and document conversion; PDF signatures,
+timestamps and revocation evidence; submission lifecycle/export; storage;
+mail/SMS/webhooks, retries and runtime health. Frontend suites exercise signing,
+editor, branding, settings, invitation/account switching and failure states.
 
-1. Backend authorization/membership roles, authentication failures and storage
-   isolation; add focused service and HTTP tests.
-2. Signing, certificate/timestamp/revocation failure paths, submitter transitions,
-   completion and download permissions.
-3. Template editing, submission generation/export, uploads and document-format
-   branches.
-4. Frontend signing/field interactions, template editor state, settings and
-   users/teams/account-switch flows, with loading/error/empty states.
-5. Mail/queue/webhook delivery and retry handling, health/runtime wiring, then
-   remaining component and helper branches.
+Actual PostgreSQL tests create documents and submissions, enforce tenant access,
+exercise concurrent password resets and team mutations, migrate up/down and
+check Mailgun replay transactions. Cryptographic tests use real signed PDF,
+PKCS#12, CMS, OCSP, CRL and OpenSSL timestamp fixtures. Browser tests verify HTML
+and XFA rendering and private-network isolation. Provider network responses,
+SMTP, queues, OS/native APIs and device primitives are controlled where noted.
 
 Keep new tests tied to observable behavior. Review covered assertions, not only
 percentages. Wire additional end-to-end/device coverage as distinct evidence;
