@@ -57,17 +57,29 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm --filter backend exec playwright install --with-deps chromium
-      - run: pnpm --filter backend test --runInBand --testTimeout=30000
+      - run: pnpm test:backend:coverage
       - run: pnpm db:migration:run
       - run: pnpm db:migration:check
       - run: pnpm --filter backend test:e2e --runInBand memberships.e2e-spec.ts
       - run: pnpm --filter @signajs/react test && pnpm --filter @signajs/react-native test
       - run: pnpm test:sdk:coverage
+      - run: pnpm test:frontend:types
+      - run: pnpm test:frontend:coverage
       - run: pnpm pack:signa-react && pnpm pack:signa-react-native
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: sdk-coverage
           path: coverage/sdk
+          if-no-files-found: warn
+          retention-days: 14
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: main-app-coverage
+          path: |
+            coverage/frontend
+            apps/backend/coverage
           if-no-files-found: warn
           retention-days: 14

@@ -1,0 +1,20 @@
+{
+  "extends": "../../apps/frontend/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../apps/frontend",
+    "incremental": false,
+    "plugins": [],
+    "types": ["node", "react"],
+    "typeRoots": [
+      "../../apps/frontend/node_modules/@types",
+      "../../node_modules/@types"
+    ],
+    "paths": {
+      "@/*": ["./*"],
+      "react": ["./node_modules/@types/react/index.d.ts"],
+      "react/*": ["./node_modules/@types/react/*"]
+    }
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["node_modules"]
+}
