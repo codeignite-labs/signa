@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/docs/docs-code-block";
 import { DocsFooter } from "@/components/docs/docs-footer";
+import { DocsGitHubLink } from "@/components/docs/docs-github-link";
 import { DocsImage } from "@/components/docs/docs-image";
 import { DocsScreenshot } from "@/components/docs/docs-screenshot";
 import { articleScreenshots, docsScreenshots } from "@/lib/docs/screenshots";
@@ -53,7 +54,10 @@ export function DocsHeader() {
       <div className="flex h-14 items-center justify-between gap-4 px-5 sm:px-8">
         <DocsMobileNav groups={docsNavGroups} />
         <DocsSearch />
-        <DocsHeaderNav />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          <DocsHeaderNav />
+          <DocsGitHubLink />
+        </div>
       </div>
     </header>
   );
@@ -63,7 +67,7 @@ function DocsHeaderNav() {
   return (
     <nav
       aria-label="Documentation shortcuts"
-      className="hidden items-center gap-7 text-sm font-medium text-muted-foreground min-[900px]:flex"
+      className="hidden items-center gap-7 text-sm font-medium text-muted-foreground xl:flex"
     >
       <Link className="transition hover:text-foreground" href="/docs/api">
         API
