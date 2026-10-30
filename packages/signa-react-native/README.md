@@ -182,3 +182,9 @@ mounted while editing; a changed signing URL intentionally starts a new document
 Use HTTPS for production. Benchmark on physical Android/iOS devices with a release
 build and the production Signa URL; a desktop mobile viewport cannot reproduce
 WebView startup, keyboard behavior or device performance.
+
+## License
+
+[MIT](./LICENSE). This license covers this SDK, not the separately hosted Signa
+platform. The platform is AGPL-3.0-only; using this SDK does not relicense the
+platform or waive its source and attribution obligations.

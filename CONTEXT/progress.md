@@ -566,3 +566,12 @@ Recently completed:
 
 - Workspace typecheck passed for all six packages. The full backend suite passed with 240 tests across 57 suites, including OpenSSL timestamp validation and Chromium-backed PDFJS/XFA tests. Both React SDK builds and regression test runners passed. Eleven membership HTTP tests passed against the local PostgreSQL database with rolled-back fixtures and mocked delivery. The migration consistency check reported no schema changes; touched-file lint and whitespace checks passed.
 - Changes are grouped into platform, SDK, and illustrated documentation commits for the user-requested PR to main. This supersedes earlier checkpoint notes saying no commit was made. Deployment configuration, live Google authentication, the remaining full signing UAT, Android release measurements, and capacity testing remain release gates; merging source does not certify production capacity or compliance.
+
+
+### 2026-10-30 — Licensing and contribution setup
+
+- Added the unchanged upstream AGPL v3 text as the platform license, retained DocuSeal's additional UI attribution terms, and documented scope in LICENSING.md and NOTICE. All application/internal workspace manifests now declare AGPL-3.0-only instead of missing or UNLICENSED metadata.
+- Preserved the two SDKs' existing MIT declarations, added package-local license texts and explicit tarball allowlist entries, and recorded a patch changeset for packaging. This is not a complete historical provenance/dependency audit or a grant to relicense third-party material.
+- Added an original CONTRIBUTING.md informed by https://github.com/antfu/contribute, adapted to Signa's actual Node/pnpm, ESLint/Prettier, backend/database, SDK testing and Changesets setup. Added a focused PR template and README entry points. No CLA or copyright assignment introduced.
+- Verified exact platform/upstream term texts against the pinned DocuSeal checkout, license metadata for every workspace, relative documentation links, formatting and whitespace. npm pack dry runs for both SDKs include LICENSE and existing build artifacts. Runtime tests were not rerun for documentation/license metadata only. Corepack's sandbox download was unavailable, so packaging checks used npm with a temporary writable cache.
+- Remaining review: in-product source offers and required upstream attribution, particularly white-label routes, need a separate runtime implementation/compliance review. The documentation explicitly does not certify these behaviors. No runtime code changed, packages published, or existing license rights revoked.

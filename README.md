@@ -2,6 +2,20 @@
 
 Signa is a TypeScript and React document-signing platform built for DocuSeal-compatible signing workflows and API behavior. It uses a NestJS backend, Next.js product and marketing applications, TypeORM, PostgreSQL or SQLite, Redis-backed queues, PDF rendering/signing tooling, mail/SMS delivery, webhooks, Supabase-backed marketing data, and shared contracts in a pnpm monorepo.
 
+## License and contributions
+
+The platform is licensed under [AGPL-3.0-only](./LICENSE). The React and React
+Native SDK directories are separately licensed under MIT. Existing third-party
+licenses and DocuSeal's applicable attribution terms remain in force; see
+[LICENSING.md](./LICENSING.md), [NOTICE](./NOTICE), and
+[LICENSE_ADDITIONAL_TERMS](./LICENSE_ADDITIONAL_TERMS) for scope and obligations.
+White labeling does not waive legally required attribution or source offers.
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, focused PRs, validation,
+SDK changesets and contribution licensing. It follows the approach of
+[Anthony Fu's contribution guide](https://github.com/antfu/contribute), adapted
+to Signa's actual tooling.
+
 This scaffold was created from the official framework CLIs:
 
 - Next.js frontend: `pnpm create next-app@latest frontend --yes`

@@ -1,0 +1,15 @@
+Signa
+Copyright (c) 2026 Signa contributors
+
+Signa is a TypeScript implementation guided by the DocuSeal project:
+https://github.com/docusealco/docuseal
+
+DocuSeal is distributed under the GNU Affero General Public License version 3
+with additional terms requiring original DocuSeal attribution in interactive
+user interfaces for covered works. The upstream license and additional terms
+are preserved in LICENSE and LICENSE_ADDITIONAL_TERMS. Original copyrights and
+notices remain with their respective holders.
+
+See LICENSING.md for scope, the separately MIT-licensed integration SDKs, and
+deployment obligations. This notice does not replace an interactive attribution
+or source offer required by the applicable license.

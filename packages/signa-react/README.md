@@ -348,3 +348,9 @@ Live theme changes use the appearance bridge and preserve unsaved fields.
 When `host` is supplied and `scriptUrl` is omitted, the component loads the matching
 self-hosted `/js/form.js` rather than the CDN build. Explicit `scriptUrl` still wins.
 Deploy the updated hosted frontend together with the SDK for the appearance bridge.
+
+## License
+
+[MIT](./LICENSE). This license covers this SDK, not the separately hosted Signa
+platform. The platform is AGPL-3.0-only; using this SDK does not relicense the
+platform or waive its source and attribution obligations.
