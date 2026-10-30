@@ -31,7 +31,10 @@
     "db:migration:check": "pnpm --filter backend db:migration:check",
     "db:migration:run": "pnpm --filter backend db:migration:run",
     "db:migration:revert": "pnpm --filter backend db:migration:revert",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "release:check": "node scripts/release/check-version.mjs",
+    "test:release": "node --test scripts/release/*.test.mjs",
+    "test:sdk:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
