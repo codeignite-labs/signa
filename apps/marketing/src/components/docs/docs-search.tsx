@@ -14,7 +14,7 @@ export function DocsSearch() {
   useDocsSearchShortcut(() => setOpen(true));
 
   return (
-    <div className="relative w-full max-w-[450px]">
+    <div className="relative min-w-0 w-full max-w-[450px]">
       <DocsSearchInput
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onChange={(value) => {
@@ -86,7 +86,7 @@ function useDocsSearchResults(query: string) {
       .filter((item) =>
         `${item.title} ${item.description} ${item.category} ${"keywords" in item ? item.keywords : ""}`
           .toLowerCase()
-          .includes(normalized)
+          .includes(normalized),
       )
       .slice(0, 8);
   }, [query]);

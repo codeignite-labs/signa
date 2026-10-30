@@ -6,5 +6,6 @@
     "./base": "./base.json",
     "./next": "./next.json",
     "./nest": "./nest.json"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }

@@ -16,7 +16,8 @@
     "dist",
     "src",
     "CHANGELOG.md",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     ".": {
