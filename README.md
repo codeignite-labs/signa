@@ -1,5 +1,12 @@
 # Signa
 
+[![CI](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
+[![Application release](https://img.shields.io/github/v/release/codeignite-labs/signa?filter=v*)](https://github.com/codeignite-labs/signa/releases)
+[![SDK coverage gate](https://img.shields.io/github/actions/workflow/status/codeignite-labs/signa/ci.yml?branch=main&label=SDK%20coverage%20%E2%89%A595%25)](https://github.com/codeignite-labs/signa/actions/workflows/ci.yml)
+[![Platform license](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](./LICENSING.md)
+[![React SDK](https://img.shields.io/npm/v/%40signajs%2Freact?label=React%20SDK)](https://www.npmjs.com/package/@signajs/react)
+[![React Native SDK](https://img.shields.io/npm/v/%40signajs%2Freact-native?label=React%20Native%20SDK)](https://www.npmjs.com/package/@signajs/react-native)
+
 Signa is a TypeScript and React document-signing platform built for DocuSeal-compatible signing workflows and API behavior. It uses a NestJS backend, Next.js product and marketing applications, TypeORM, PostgreSQL or SQLite, Redis-backed queues, PDF rendering/signing tooling, mail/SMS delivery, webhooks, Supabase-backed marketing data, and shared contracts in a pnpm monorepo.
 
 ## License and contributions
@@ -179,6 +186,21 @@ pnpm release:packages
 ```
 
 For CI, prefer npm trusted publishing with provenance enabled so published package tarballs are tied to the GitHub Actions release workflow. The publish workflow should run the same checks, then execute `pnpm release:packages` with npm provenance/trusted-publisher configuration.
+
+## Application releases
+
+The backend and frontend share one SemVer application version, managed through
+reviewed Release Please PRs, a changelog and `vMAJOR.MINOR.PATCH` tags. CI checks
+version consistency, builds, tests and SDK coverage. Publishing a reviewed GitHub
+release starts the container workflow, which produces version/commit tags,
+provenance, an SBOM and a deployment digest. SDKs continue to use Changesets
+independently. See [RELEASING.md](./RELEASING.md) for setup, permissions, release
+gates, retries and rollback.
+
+The CI and coverage-gate badges report the current main-branch workflow status;
+they are not hard-coded passing or coverage percentages. Reports are attached to
+CI runs. The application release badge has no version until the first release
+is published.
 
 ## Docker Deployment
 

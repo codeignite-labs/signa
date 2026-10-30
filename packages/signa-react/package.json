@@ -39,5 +39,10 @@
     "esbuild": "^0.27.2",
     "react": "^19.2.3",
     "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codeignite-labs/signa.git",
+    "directory": "packages/signa-react"
   }
 }

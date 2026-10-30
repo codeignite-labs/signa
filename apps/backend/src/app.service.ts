@@ -10,7 +10,7 @@ export class AppService {
   }
 
   getVersion(): string {
-    return this.config.get<string>('APP_VERSION') || '0.1.0';
+    return this.config.get<string>('APP_VERSION') || '0.1.0'; // x-release-please-version
   }
 
   getCommitSha(): string | null {

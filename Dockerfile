@@ -34,7 +34,9 @@ ARG NEXT_PUBLIC_SIGNING_BASE_URL=
 ARG NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=
 ARG NEXT_PUBLIC_GOOGLE_PICKER_API_KEY=
 ARG NEXT_PUBLIC_GOOGLE_PICKER_APP_ID=
+# x-release-please-start-version
 ARG APP_VERSION=0.1.0
+# x-release-please-end
 ARG APP_COMMIT_SHA=
 ARG APP_BUILD_TIME=
 
@@ -51,7 +53,9 @@ RUN pnpm build
 
 FROM base AS runner
 
+# x-release-please-start-version
 ARG APP_VERSION=0.1.0
+# x-release-please-end
 ARG APP_COMMIT_SHA=
 ARG APP_BUILD_TIME=
 

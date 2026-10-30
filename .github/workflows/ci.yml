@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref || '' }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: signa_test
+          POSTGRES_USER: signa
+          POSTGRES_PASSWORD: local-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U signa -d signa_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgres://signa:local-ci-only@localhost:5432/signa_test
+      DATABASE_SSL: "false"
+      DATABASE_MIGRATIONS_RUN: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm release:check
+      - run: pnpm test:release
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm --filter backend exec playwright install --with-deps chromium
+      - run: pnpm --filter backend test --runInBand --testTimeout=30000
+      - run: pnpm db:migration:run
+      - run: pnpm db:migration:check
+      - run: pnpm --filter backend test:e2e --runInBand memberships.e2e-spec.ts
+      - run: pnpm --filter @signajs/react test && pnpm --filter @signajs/react-native test
+      - run: pnpm test:sdk:coverage
+      - run: pnpm pack:signa-react && pnpm pack:signa-react-native
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sdk-coverage
+          path: coverage/sdk
+          if-no-files-found: warn
+          retention-days: 14

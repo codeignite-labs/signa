@@ -139,6 +139,14 @@ issues and review replies concise, specific and in your own voice. Disclose
 material uncertainty or unverified generated output rather than passing it off
 as established fact.
 
+## Application releases
+
+Backend and frontend share one application version, managed through reviewed
+Release Please PRs. Use Conventional Commits, explain breaking changes and
+migrations, and avoid hand-editing version defaults. See
+[RELEASING.md](./RELEASING.md) for release checks and maintainer activation steps.
+SDKs use the independent Changesets lane below.
+
 ## SDK changes and releases
 
 Public SDK behavior or packaging changes need a changeset:
