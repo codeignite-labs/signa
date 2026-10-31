@@ -1,12 +1,17 @@
 import {
-  BadRequestException,
+  addTeamMember,
+  updateTeamMemberRole,
+  archiveTeamMember,
+} from './team-membership-mutations';
+import {
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { EntityManager, IsNull, Not, Repository } from 'typeorm';
+import { lockTeamMemberships } from './team-membership-lock';
 import {
   throwDatabaseErrors,
   throwIfUniqueConstraint,
@@ -191,46 +196,22 @@ export class TeamsService {
     skipPermissionCheck?: boolean;
     teamId: string;
   }): Promise<TeamMemberResponseDto> {
-    await this.findAccountTeamOrFail(options);
-
-    if (!options.skipPermissionCheck) {
-      await this.ensureCanManageTeam(options.actor, options.teamId);
-    }
-
-    const user = await this.findActiveAccountUserOrFail({
-      accountId: options.accountId,
-      userId: options.input.user_id,
-    });
-    const existingMember = await this.teamMembers.findOne({
-      where: {
+    return this.teams.manager.transaction(async (manager) => {
+      const members = await this.lockMembershipChange(manager, options);
+      const user = await this.findActiveAccountUserOrFail(
+        {
+          accountId: options.accountId,
+          userId: options.input.user_id,
+        },
+        manager,
+      );
+      return addTeamMember(members, {
         accountId: options.accountId,
         teamId: options.teamId,
-        userId: user.id,
-      },
-      withDeleted: true,
-      relations: { user: true },
+        user,
+        role: this.normalizeRole(options.input.role),
+      });
     });
-    const role = this.normalizeRole(options.input.role);
-
-    if (existingMember) {
-      existingMember.archivedAt = null;
-      existingMember.role = role;
-      return toMemberResponse(await this.teamMembers.save(existingMember));
-    }
-
-    const member = this.teamMembers.create({
-      accountId: options.accountId,
-      role,
-      teamId: options.teamId,
-      userId: user.id,
-      user,
-    });
-
-    try {
-      return toMemberResponse(await this.teamMembers.save(member));
-    } catch (error) {
-      throwDatabaseErrors(error);
-    }
   }
 
   async updateMember(options: {
@@ -240,16 +221,16 @@ export class TeamsService {
     memberId: string;
     teamId: string;
   }): Promise<TeamMemberResponseDto> {
-    await this.ensureCanManageTeam(options.actor, options.teamId);
-    const member = await this.findActiveMemberOrFail(options);
-    const role = this.normalizeRole(options.input.role);
-
-    if (member.role === 'manager' && role !== 'manager') {
-      await this.ensureAnotherManager(member);
-    }
-
-    member.role = role;
-    return toMemberResponse(await this.teamMembers.save(member));
+    return this.teams.manager.transaction(async (manager) => {
+      const members = await this.lockMembershipChange(manager, {
+        ...options,
+        includeArchived: true,
+      });
+      return updateTeamMemberRole(members, {
+        ...options,
+        role: this.normalizeRole(options.input.role),
+      });
+    });
   }
 
   async removeMember(options: {
@@ -258,15 +239,32 @@ export class TeamsService {
     memberId: string;
     teamId: string;
   }): Promise<TeamMemberResponseDto> {
-    await this.ensureCanManageTeam(options.actor, options.teamId);
-    const member = await this.findActiveMemberOrFail(options);
+    return this.teams.manager.transaction(async (manager) => {
+      const members = await this.lockMembershipChange(manager, {
+        ...options,
+        includeArchived: true,
+      });
+      return archiveTeamMember(members, options);
+    });
+  }
 
-    if (member.role === 'manager') {
-      await this.ensureAnotherManager(member);
+  private async lockMembershipChange(
+    manager: EntityManager,
+    options: {
+      accountId: string;
+      teamId: string;
+      actor: User;
+      includeArchived?: boolean;
+      skipPermissionCheck?: boolean;
+    },
+  ): Promise<Repository<TeamMember>> {
+    if (!(await lockTeamMemberships(manager, options))) {
+      throw new NotFoundException({ error: 'Team not found' });
     }
-
-    member.archivedAt = new Date();
-    return toMemberResponse(await this.teamMembers.save(member));
+    const members = manager.getRepository(TeamMember);
+    if (!options.skipPermissionCheck)
+      await this.ensureCanManageTeam(options.actor, options.teamId, members);
+    return members;
   }
 
   async listInvitations(options: {
@@ -381,34 +379,22 @@ export class TeamsService {
     return expiresAt;
   }
 
-  private async ensureAnotherManager(member: TeamMember): Promise<void> {
-    const managerCount = await this.teamMembers.count({
-      where: {
-        archivedAt: IsNull(),
-        role: 'manager',
-        teamId: member.teamId,
-      },
-    });
-
-    if (managerCount <= 1) {
-      throw new BadRequestException({
-        error: 'A team must have at least one manager',
-      });
-    }
-  }
-
   private ensureAccountAdmin(user: User): void {
     if (user.role !== 'admin') {
       throw new ForbiddenException({ error: 'Account admin access required' });
     }
   }
 
-  private async ensureCanManageTeam(user: User, teamId: string): Promise<void> {
+  private async ensureCanManageTeam(
+    user: User,
+    teamId: string,
+    members = this.teamMembers,
+  ): Promise<void> {
     if (user.role === 'admin') {
       return;
     }
 
-    const member = await this.teamMembers.findOneBy({
+    const member = await members.findOneBy({
       archivedAt: IsNull(),
       role: 'manager',
       teamId,
@@ -441,13 +427,17 @@ export class TeamsService {
     return team;
   }
 
-  private async findActiveAccountUserOrFail(options: {
-    accountId: string;
-    userId: string;
-  }): Promise<User> {
+  private async findActiveAccountUserOrFail(
+    options: {
+      accountId: string;
+      userId: string;
+    },
+    manager: EntityManager,
+  ): Promise<User> {
     const user = await this.memberships.resolveUser(
       options.userId,
       options.accountId,
+      manager,
     );
 
     if (!user) {
@@ -455,28 +445,6 @@ export class TeamsService {
     }
 
     return user;
-  }
-
-  private async findActiveMemberOrFail(options: {
-    accountId: string;
-    memberId: string;
-    teamId: string;
-  }): Promise<TeamMember> {
-    const member = await this.teamMembers.findOne({
-      where: {
-        accountId: options.accountId,
-        archivedAt: IsNull(),
-        id: options.memberId,
-        teamId: options.teamId,
-      },
-      relations: { user: true },
-    });
-
-    if (!member) {
-      throw new NotFoundException({ error: 'Team member not found' });
-    }
-
-    return member;
   }
 
   private async findAccountInvitationOrFail(options: {

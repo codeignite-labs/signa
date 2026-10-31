@@ -66,16 +66,16 @@ function getApiResource(
     return 'submissions';
   }
 
+  if (path.includes('/webhooks') || path.includes('/webhook-events')) {
+    return 'webhooks';
+  }
+
   if (path.includes('/attachments') || path.includes('/events')) {
     return 'submissions';
   }
 
   if (path.includes('/submitters')) {
     return 'submitters';
-  }
-
-  if (path.includes('/webhooks') || path.includes('/webhook-events')) {
-    return 'webhooks';
   }
 
   if (path.includes('/tools')) {

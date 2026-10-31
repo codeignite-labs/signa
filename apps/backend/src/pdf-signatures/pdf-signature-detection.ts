@@ -95,7 +95,7 @@ function inspectByteRange(
   file: Buffer,
   byteRangeText: string,
 ): DetectedPdfSignature['byteRange'] {
-  const values = byteRangeText.match(/\d+/g)?.map(Number) ?? [];
+  const values = byteRangeText.match(/-?\d+/g)?.map(Number) ?? [];
 
   if (
     values.length !== 4 ||
@@ -179,7 +179,7 @@ function extractPdfHexString(text: string, key: string): string | null {
   }
 
   if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
-    return buffer.subarray(2).toString('utf16le').replace(/\0/g, '');
+    return new TextDecoder('utf-16be').decode(buffer.subarray(2));
   }
 
   return buffer.toString('utf8');

@@ -1,5 +1,7 @@
+import { MailgunWebhookReceipt } from './entities/mailgun-webhook-receipt.entity';
+import { AuthModule } from '../auth/auth.module';
 import { BrandingModule } from '../branding/branding.module';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { BullModule } from '@nestjs/bullmq';
@@ -25,9 +27,11 @@ import { MailTemplateResolver } from './mail-template-resolver.service';
 import { EmailVerificationCodeService } from './email-verification-code.service';
 import { EmailEvent } from './entities/email-event.entity';
 import { EmailMessage } from './entities/email-message.entity';
+import { MailgunWebhookService } from './mailgun-webhook.service';
 
 @Module({
   imports: [
+    forwardRef(() => AuthModule),
     BrandingModule,
     StorageModule,
     BullModule.registerQueue({ name: queueNames.mail }),
@@ -39,6 +43,7 @@ import { EmailMessage } from './entities/email-message.entity';
       Account,
       AccountConfig,
       EncryptedConfig,
+      MailgunWebhookReceipt,
       EmailEvent,
       EmailMessage,
       Submission,
@@ -58,6 +63,7 @@ import { EmailMessage } from './entities/email-message.entity';
     MailReminderScheduler,
     MailService,
     MailTemplateResolver,
+    MailgunWebhookService,
   ],
   exports: [EmailVerificationCodeService, MailService, MailTemplateResolver],
 })

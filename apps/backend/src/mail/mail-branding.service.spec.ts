@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { BrandingService } from '../branding/branding.service';
 import { MailTemplateResolver } from './mail-template-resolver.service';
 import { mailTemplateNames } from './mail.types';
 import { MailBrandingService } from './mail-branding.service';
@@ -69,5 +71,19 @@ describe('mail account branding', () => {
       productName: 'Signa',
       logoUrl: 'http://localhost:3000/images/logo.png',
     });
+  });
+});
+
+it('uses an explicitly configured platform mail logo without relying on environment files', () => {
+  const branding = new MailBrandingService(
+    new ConfigService({
+      MAIL_LOGO_URL: 'https://assets.example.test/platform-logo.png',
+      FRONTEND_ORIGIN: 'https://signa.example.test',
+    }),
+    {} as BrandingService,
+  );
+  expect(branding.getBaseContext()).toMatchObject({
+    logoUrl: 'https://assets.example.test/platform-logo.png',
+    productName: 'Signa',
   });
 });

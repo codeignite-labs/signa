@@ -1,9 +1,8 @@
 import { UnprocessableEntityException } from '@nestjs/common';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { basename, extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import { downloadPublicDocument } from '../common/http/public-download';
 
 const dangerousExtensions = new Set([
   'ade',
@@ -89,19 +88,12 @@ async function buildAttachmentFromUrl(
   type: string,
   maxDownloadBytes: number,
 ): Promise<PendingSubmitterAttachment> {
-  const parsedUrl = await validateDownloadUrl(url);
-  const response = await fetch(parsedUrl);
-
-  if (!response.ok) {
-    throw new UnprocessableEntityException({
-      error: `Error loading: ${parsedUrl}`,
-    });
-  }
+  const response = await downloadPublicDocument(url, maxDownloadBytes);
 
   const buffer = Buffer.from(await response.arrayBuffer());
   assertDownloadSize(buffer, maxDownloadBytes);
 
-  const filename = safeRemoteFilename(parsedUrl, type);
+  const filename = safeRemoteFilename(url, type);
   assertSafeExtension(filename);
 
   return buildPendingAttachment({
@@ -110,32 +102,6 @@ async function buildAttachmentFromUrl(
     contentType: response.headers.get('content-type') ?? undefined,
     type,
   });
-}
-
-async function validateDownloadUrl(url: string): Promise<string> {
-  const parsed = new URL(url);
-
-  if (parsed.protocol !== 'https:' || !['', '443'].includes(parsed.port)) {
-    throw new UnprocessableEntityException({
-      error: `Error loading: ${url}. Only HTTPS is allowed.`,
-    });
-  }
-
-  if (isBlockedHostname(parsed.hostname)) {
-    throw new UnprocessableEntityException({
-      error: `Error loading: ${url}. Can't download from localhost.`,
-    });
-  }
-
-  const records = await lookup(parsed.hostname, { all: true });
-
-  if (records.some((record) => isBlockedAddress(record.address))) {
-    throw new UnprocessableEntityException({
-      error: `Error loading: ${url}. Can't download from localhost.`,
-    });
-  }
-
-  return parsed.toString();
 }
 
 async function decodeAttachmentBase64(
@@ -193,12 +159,13 @@ async function buildTypedSignatureAttachment(
   };
 }
 
-async function buildPendingAttachment(input: {
+export async function buildPendingAttachment(input: {
   buffer: Buffer;
   filename: string;
   contentType?: string;
   type: string;
 }): Promise<PendingSubmitterAttachment> {
+  assertSafeExtension(input.filename);
   const metadata = await buildAttachmentMetadata(input.buffer, input.type);
 
   return {
@@ -300,35 +267,6 @@ function detectFileType(buffer: Buffer): { ext: string; mime: string } | null {
   }
 
   return null;
-}
-
-function isBlockedHostname(hostname: string): boolean {
-  return ['0.0.0.0', '127.0.0.1', 'localhost', '::1'].includes(hostname);
-}
-
-function isBlockedAddress(address: string): boolean {
-  if (isBlockedHostname(address)) {
-    return true;
-  }
-
-  if (isIP(address) === 4) {
-    const [first, second] = address.split('.').map(Number);
-
-    return (
-      first === 10 ||
-      first === 127 ||
-      (first === 172 && second >= 16 && second <= 31) ||
-      (first === 192 && second === 168) ||
-      (first === 169 && second === 254)
-    );
-  }
-
-  return (
-    address === '::1' ||
-    address.startsWith('fc') ||
-    address.startsWith('fd') ||
-    address.startsWith('fe80')
-  );
 }
 
 function escapeXml(value: string): string {

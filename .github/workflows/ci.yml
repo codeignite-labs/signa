@@ -57,6 +57,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm --filter backend exec playwright install --with-deps chromium
+      - run: pnpm --filter backend test:coverage-tools
       - run: pnpm test:backend:coverage
       - run: pnpm db:migration:run
       - run: pnpm db:migration:check

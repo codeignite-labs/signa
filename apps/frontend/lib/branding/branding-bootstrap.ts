@@ -2,7 +2,7 @@ import { brandPalette } from "@repo/shared/branding";
 import { brandingCacheConfig, parseBrandingSnapshot } from "./branding-cache";
 
 // Kept self-contained so the browser can run it before React or application JS.
-function initializeBranding(
+export function initializeBranding(
   parse: typeof parseBrandingSnapshot,
   config: typeof brandingCacheConfig,
   neutral: { light: Record<string, string>; dark: Record<string, string> },

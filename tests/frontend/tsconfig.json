@@ -12,9 +12,27 @@
     "paths": {
       "@/*": ["./*"],
       "react": ["./node_modules/@types/react/index.d.ts"],
-      "react/*": ["./node_modules/@types/react/*"]
+      "react/*": ["./node_modules/@types/react/*"],
+      "sonner": ["./node_modules/sonner/dist/index.d.ts"],
+      "react-signature-canvas": [
+        "./node_modules/react-signature-canvas/dist/index.d.ts"
+      ],
+      "@tanstack/react-query": [
+        "./node_modules/@tanstack/react-query/build/modern/index.d.ts"
+      ],
+      "qr-creator": ["./node_modules/qr-creator/types/qr-creator.d.ts"],
+      "papaparse": ["./node_modules/@types/papaparse/index.d.ts"],
+      "read-excel-file/browser": [
+        "./node_modules/read-excel-file/browser/index.d.ts"
+      ],
+      "nextjs-toploader": ["./node_modules/nextjs-toploader/dist/index.d.ts"]
     }
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../../apps/frontend/**/*.d.ts",
+    "../../apps/frontend/app/s/[slug]/signing-page.tsx"
+  ],
   "exclude": ["node_modules"]
 }

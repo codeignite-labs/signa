@@ -5,8 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheckIcon,
   CalendarDaysIcon,
-  CheckCircle2Icon,
-  CircleXIcon,
   FileTextIcon,
   IdCardIcon,
   ShieldCheckIcon,
@@ -47,6 +45,7 @@ import { isEqual } from "@/lib/object-diff";
 import { SigningCertificatesSection } from "./signing-certificates-section";
 import { CertificateUploadDialog } from "./certificate-upload-dialog";
 import { SettingsSidebar } from "./settings-sidebar";
+import { SignatureVerificationStatus } from "./pdf-verification-status";
 
 const filenameFormats: Array<{
   label: string;
@@ -278,7 +277,9 @@ function TrustRootsSection({
             Trusted Certificate Authorities
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Approve public CA certificates for signing identities and PDF verification in this workspace. Uploading a private CA does not make it publicly trusted.
+            Approve public CA certificates for signing identities and PDF
+            verification in this workspace. Uploading a private CA does not make
+            it publicly trusted.
           </p>
         </div>
         <CertificateUploadDialog kind="trust" onUpload={onUpload} />
@@ -499,7 +500,6 @@ function VerificationResult({
 
   const signatures = verification.signatures;
   const signatureCount = signatures.length;
-  const isTrusted = verification.checksum_status === "verified";
 
   if (signatureCount === 0) {
     return (
@@ -521,15 +521,6 @@ function VerificationResult({
       </div>
 
       <div className="mt-4 flex flex-col gap-2">
-        <VerificationStatusLine icon="success" label="Signature valid" />
-        <VerificationStatusLine
-          icon={isTrusted ? "success" : "error"}
-          label={
-            isTrusted
-              ? "Signed with trusted certificate"
-              : "Signed with external certificate"
-          }
-        />
         <p className="text-xl font-bold leading-snug">
           Certificate chain: {getCertificateChainLabel(verification)}
         </p>
@@ -547,29 +538,6 @@ function VerificationResult({
   );
 }
 
-function VerificationStatusLine({
-  icon,
-  label,
-}: {
-  icon: "error" | "success";
-  label: string;
-}) {
-  const Icon = icon === "success" ? CheckCircle2Icon : CircleXIcon;
-
-  return (
-    <div className="flex items-center gap-2 text-xl font-bold leading-tight">
-      <Icon
-        className={
-          icon === "success"
-            ? "size-5 text-emerald-500"
-            : "size-5 text-rose-500"
-        }
-      />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 function SignatureMetadata({
   signature,
 }: {
@@ -582,6 +550,7 @@ function SignatureMetadata({
 
   return (
     <>
+      <SignatureVerificationStatus signature={signature} />
       <MetadataLine icon={UserRoundIcon} label={signerLabel} />
       <MetadataLine
         icon={CalendarDaysIcon}

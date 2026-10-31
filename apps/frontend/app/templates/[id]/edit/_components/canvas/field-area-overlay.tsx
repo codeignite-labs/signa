@@ -196,7 +196,10 @@ export function FieldAreaOverlay({
     });
   }
 
-  function finishInteraction() {
+  function finishInteraction(
+    event: ReactPointerEvent<HTMLDivElement | HTMLButtonElement>,
+  ) {
+    event.stopPropagation();
     if (!interaction) {
       return;
     }

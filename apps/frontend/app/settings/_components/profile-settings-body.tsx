@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import dynamic from "next/dynamic";
+import { SignatureCanvas } from "@/components/signing/signature-canvas";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -45,17 +45,6 @@ import { cn } from "@/lib/utils";
 import { getChangedFields } from "@/lib/object-diff";
 import { MfaSection } from "./profile-mfa-section";
 import { SettingsSidebar } from "./settings-sidebar";
-
-type SignatureCanvasProps = {
-  canvasProps?: React.CanvasHTMLAttributes<HTMLCanvasElement>;
-  penColor?: string;
-  ref?: React.Ref<SignatureCanvasType>;
-};
-
-const SignatureCanvas = dynamic(() => import("react-signature-canvas"), {
-  ssr: false,
-}) as React.ComponentType<SignatureCanvasProps>;
-
 
 type ProfileFormState = {
   firstName: string;
@@ -423,7 +412,7 @@ function ProfileAssetDialog({
                     className: "h-48 w-full",
                   }}
                   penColor="#1f1230"
-                  ref={signaturePadRef}
+                  canvasRef={signaturePadRef}
                 />
               </div>
             </TabsContent>

@@ -21,8 +21,9 @@ export function getTemplateSendRoles(
       id: submitter.uuid || `role-${index}`,
       name: submitter.name?.trim() || `Party ${index + 1}`,
     }))
-    .filter((role, index, roles) =>
-      roles.findIndex((candidate) => candidate.name === role.name) === index,
+    .filter(
+      (role, index, roles) =>
+        roles.findIndex((candidate) => candidate.name === role.name) === index,
     );
 }
 
@@ -150,7 +151,9 @@ export function buildSampleRecipientsCsv(roles: TemplateSendRole[]): string {
   return `${headers.join(",")}\n${sampleValues.join(",")}\n`;
 }
 
-export function normalizeSheetRecipientRows(rows: unknown[][]): BulkRecipientRow[] {
+export function normalizeSheetRecipientRows(
+  rows: unknown[][],
+): BulkRecipientRow[] {
   const [headerRow, ...dataRows] = rows;
 
   if (!headerRow?.length) {
@@ -247,7 +250,10 @@ function parseBulkRecipientRow(
   const recipientSet = createRecipientSet(roles, `bulk-row-${rowIndex + 1}`);
 
   roles.forEach((role, index) => {
-    recipientSet.contacts[role.id] = mapRoleBulkContact(values, role, index);
+    recipientSet.contacts[role.id] = mapRoleBulkContact(values, role, {
+      index,
+      allowUnprefixed: roles.length === 1,
+    });
   });
 
   return recipientSet;
@@ -263,8 +269,9 @@ function normalizeBulkEntries(row: BulkRecipientRow): Array<[string, string]> {
 function mapRoleBulkContact(
   values: Map<string, string>,
   role: TemplateSendRole,
-  index: number,
+  context: { index: number; allowUnprefixed: boolean },
 ) {
+  const { index, allowUnprefixed } = context;
   const roleKey = normalizeRecipientColumnKey(role.name);
   const ordinalKey = `party${index + 1}`;
 
@@ -273,16 +280,19 @@ function mapRoleBulkContact(
       values.get(`${roleKey}email`) ??
       values.get(`${ordinalKey}email`) ??
       values.get(`email${index + 1}`) ??
+      (allowUnprefixed ? values.get("email") : undefined) ??
       "",
     name:
       values.get(`${roleKey}name`) ??
       values.get(`${ordinalKey}name`) ??
       values.get(`name${index + 1}`) ??
+      (allowUnprefixed ? values.get("name") : undefined) ??
       "",
     phone:
       values.get(`${roleKey}phone`) ??
       values.get(`${ordinalKey}phone`) ??
       values.get(`phone${index + 1}`) ??
+      (allowUnprefixed ? values.get("phone") : undefined) ??
       "",
   };
 }

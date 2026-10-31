@@ -15,6 +15,9 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiExtraModels,
+  getSchemaPath,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -53,10 +56,12 @@ import {
 import { SubmissionEventLogResponseDto } from './dto/submission-event-log-response.dto';
 import { SubmissionExportService } from './submission-export.service';
 import { SubmissionsService } from './submissions.service';
+import { CreateSubmissionBodyPipe } from './pipes/create-submission-body/create-submission-body.pipe';
 
 @Controller('submissions')
 @UseGuards(ApiOrJwtGuard, UserHydrationGuard)
 @ApiTags('Submissions')
+@ApiExtraModels(CreateSubmissionDto, CreateSubmissionBatchDto)
 @ApiBearerAuth()
 @ApiSecurity('X-Auth-Token')
 export class SubmissionsController {
@@ -151,6 +156,15 @@ export class SubmissionsController {
   }
 
   @Post()
+  @ApiBody({
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(CreateSubmissionDto) },
+        { $ref: getSchemaPath(CreateSubmissionBatchDto) },
+        { type: 'array', items: { $ref: getSchemaPath(CreateSubmissionDto) } },
+      ],
+    },
+  })
   @ApiOperation({
     description:
       'Creates one or more submitters from an existing template. Accepts DocuSeal-compatible submitter role/email/phone/value payloads, optional message overrides, ordering, expiry, and send flags.',
@@ -159,7 +173,7 @@ export class SubmissionsController {
   @ApiOkResponse({ type: [SubmissionSubmitterResponseDto] })
   createSubmission(
     @CurrentUser() user: User,
-    @Body()
+    @Body(CreateSubmissionBodyPipe)
     body:
       | CreateSubmissionDto
       | CreateSubmissionBatchDto

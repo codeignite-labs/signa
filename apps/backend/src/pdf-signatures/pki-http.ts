@@ -13,6 +13,10 @@ for (const [network, bits] of [
   ['172.16.0.0', 12],
   ['192.168.0.0', 16],
   ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.88.99.0', 24],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
   ['198.18.0.0', 15],
   ['224.0.0.0', 4],
   ['240.0.0.0', 4],
@@ -24,6 +28,10 @@ for (const [network, bits] of [
   ['fc00::', 7],
   ['fe80::', 10],
   ['ff00::', 8],
+  ['2001::', 23],
+  ['2001:db8::', 32],
+  ['2002::', 16],
+  ['3fff::', 20],
 ] as const)
   denied.addSubnet(network, bits, 'ipv6');
 
@@ -77,6 +85,7 @@ export async function fetchPki(
       url,
       {
         method: options.method ?? 'GET',
+        family: target.family,
         headers: options.headers,
         lookup: (_hostname, _options, callback) =>
           callback(null, target.address, target.family),
@@ -86,9 +95,11 @@ export async function fetchPki(
         let size = 0;
         response.on('data', (chunk: Buffer) => {
           size += chunk.length;
-          if (size > (options.maxBytes ?? 10 * 1024 * 1024))
-            request.destroy(new Error('PKI response exceeds size limit'));
-          else chunks.push(chunk);
+          if (size > (options.maxBytes ?? 10 * 1024 * 1024)) {
+            const error = new Error('PKI response exceeds size limit');
+            reject(error);
+            request.destroy(error);
+          } else chunks.push(chunk);
         });
         response.on('error', reject);
         response.on('end', () => {
@@ -106,18 +117,37 @@ export async function fetchPki(
               [204, 205, 304].includes(status)
                 ? null
                 : new Uint8Array(Buffer.concat(chunks)),
-              { status },
+              { status, headers: downloadHeaders(response.headers) },
             ),
           );
         });
       },
     );
     const timeout = setTimeout(
-      () => request.destroy(new Error('PKI request timed out')),
+      () => {
+        const error = new Error('PKI request timed out');
+        reject(error);
+        request.destroy(error);
+      },
       Math.max(1, options.timeoutMs - (Date.now() - started)),
     );
     request.on('close', () => clearTimeout(timeout));
     request.on('error', reject);
     request.end(options.body);
   });
+}
+
+function downloadHeaders(
+  headers: import('node:http').IncomingHttpHeaders,
+): Headers {
+  const result = new Headers();
+  for (const name of [
+    'content-type',
+    'content-disposition',
+    'content-length',
+  ]) {
+    const value = headers[name];
+    if (typeof value === 'string') result.set(name, value);
+  }
+  return result;
 }

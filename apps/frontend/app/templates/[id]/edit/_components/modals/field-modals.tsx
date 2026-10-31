@@ -237,7 +237,7 @@ export function FieldAdvancedSettingsModal({
 
     if (supportsTextValidation) {
       if (!validationKind) {
-        delete patch.validation;
+        patch.validation = undefined;
       } else if (validationKind === "length") {
         patch.validation = {
           pattern: `.{${lengthMin.trim() || "0"},${lengthMax.trim()}}`,

@@ -289,8 +289,8 @@ export class PdfXfaFormService {
 
   private resolveBox(node: PdfjsXfaNode, parentBox: XfaBox): XfaBox {
     const style = getStyle(node);
-    const left = parseCssLength(style.left, 0);
-    const top = parseCssLength(style.top, 0);
+    const left = parseCssLength(style.left, 0, parentBox.width);
+    const top = parseCssLength(style.top, 0, parentBox.height);
     const width = parseCssLength(style.width, parentBox.width);
     const height = parseCssLength(style.height, parentBox.height);
 
@@ -524,7 +524,11 @@ function normalizeText(value: string): string {
   return value.replaceAll(/\s+/g, ' ').replaceAll(/\s+:/g, ':').trim();
 }
 
-function parseCssLength(value: unknown, fallback: number): number {
+function parseCssLength(
+  value: unknown,
+  fallback: number,
+  percentageBase = fallback,
+): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -537,7 +541,7 @@ function parseCssLength(value: unknown, fallback: number): number {
     const percentage = Number.parseFloat(value);
 
     return Number.isFinite(percentage)
-      ? (fallback * percentage) / 100
+      ? (percentageBase * percentage) / 100
       : fallback;
   }
 

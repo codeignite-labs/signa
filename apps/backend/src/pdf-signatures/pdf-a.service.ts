@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -37,6 +41,11 @@ export class PdfAService {
     const level = this.config.get<string>('PDF_A_LEVEL', '2b');
 
     if (!enabled) {
+      if (required) {
+        throw new UnprocessableEntityException({
+          error: 'Required PDF/A conversion is disabled',
+        });
+      }
       return {
         buffer: pdfBuffer,
         metadata: disabledPdfA(required, level),
@@ -52,7 +61,15 @@ export class PdfAService {
       await writeFile(inputPath, pdfBuffer);
       await this.runGhostscript({ inputPath, level, outputPath });
       const converted = await readFile(outputPath);
-      const validationStatus = await this.validateWithVeraPdf(outputPath);
+      const validationStatus = await this.validateWithVeraPdf(
+        outputPath,
+        level,
+      );
+      if (required && validationStatus !== 'validated') {
+        throw new UnprocessableEntityException({
+          error: `Required PDF/A conformance validation ${validationStatus}`,
+        });
+      }
 
       return {
         buffer: converted,
@@ -122,17 +139,20 @@ export class PdfAService {
     );
   }
 
-  private async validateWithVeraPdf(path: string): Promise<PdfAStatus> {
+  private async validateWithVeraPdf(
+    path: string,
+    level: string,
+  ): Promise<PdfAStatus> {
     const binary = this.config.get<string>('PDF_A_VERAPDF_PATH', 'verapdf');
 
     try {
-      await runProcess(
+      const report = await runProcess(
         binary,
-        ['--format', 'text', path],
+        ['--format', 'json', '--flavour', level, path],
         this.config.get<number>('PDF_A_TIMEOUT_MS', 60_000),
       );
 
-      return 'validated';
+      return hasCompliantVeraPdfReport(report) ? 'validated' : 'failed';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -163,14 +183,16 @@ function runProcess(
   command: string,
   args: string[],
   timeoutMs: number,
-): Promise<void> {
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error(`${command} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     const stderr: Buffer[] = [];
+    const stdout: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
 
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
     child.on('error', (error) => {
@@ -181,7 +203,7 @@ function runProcess(
       clearTimeout(timer);
 
       if (code === 0) {
-        resolve();
+        resolve(Buffer.concat(stdout).toString('utf8'));
         return;
       }
 
@@ -196,4 +218,27 @@ function runProcess(
 
 function isMissingBinaryError(message: string): boolean {
   return message.includes('ENOENT') || message.includes('not found');
+}
+
+// veraPDF JsonHandler serializes report.jobs[].validationResult[] with compliant booleans.
+function hasCompliantVeraPdfReport(output: string): boolean {
+  const document: unknown = JSON.parse(output);
+  if (!isRecord(document) || !isRecord(document.report)) return false;
+  const jobs = document.report.jobs;
+  if (!Array.isArray(jobs) || jobs.length !== 1) return false;
+  const job: unknown = jobs[0];
+  if (!isRecord(job) || !Array.isArray(job.validationResult)) return false;
+  return (
+    job.validationResult.length > 0 &&
+    job.validationResult.every(
+      (result: unknown) =>
+        isRecord(result) &&
+        result.compliant === true &&
+        result.jobEndStatus === 'normal',
+    )
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

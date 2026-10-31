@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
+import { SignatureCanvas } from "@/components/signing/signature-canvas";
 import {
   AsYouType,
   getExampleNumber,
@@ -67,18 +67,14 @@ import {
 import phoneData from "@/lib/phone-data";
 import { cn } from "@/lib/utils";
 
-type SignatureCanvasProps = {
-  canvasProps?: React.CanvasHTMLAttributes<HTMLCanvasElement>;
-  penColor?: string;
-  ref?: React.Ref<SignatureCanvasType>;
-  throttle?: number;
+type SignatureMode = "draw" | "phone" | "type" | "upload";
+type PhoneAcceptance = {
+  acceptedValue?: string;
+  verifiedValue?: string;
+  onAccept: (phone: string) => void;
+  onVerify: (phone: string) => void;
 };
 
-const SignatureCanvas = dynamic(() => import("react-signature-canvas"), {
-  ssr: false,
-}) as React.ComponentType<SignatureCanvasProps>;
-
-type SignatureMode = "draw" | "phone" | "type" | "upload";
 type SavedSignatureAsset = {
   uuid: string;
   filename: string;
@@ -119,6 +115,12 @@ export function SignaturePanel({
   };
 }) {
   const [mode, setMode] = useState<SignatureMode>("draw");
+  const [acceptedPhoneValues, setAcceptedPhoneValues] = useState(() =>
+    getSavedPhoneValues(fields, form),
+  );
+  const [verifiedPhoneValues, setVerifiedPhoneValues] = useState<
+    Record<string, string>
+  >({});
   const [typedSignature, setTypedSignature] = useState(
     form.submitter.name ?? "",
   );
@@ -307,7 +309,7 @@ export function SignaturePanel({
 
     if (
       isRequiredField(selectedField) &&
-      !hasRequiredValue(selectedField, draftValue)
+      !hasDraftValue(selectedField, draftValue)
     ) {
       setInvalidFieldKey(getFieldKey(selectedField));
       toast.error("Complete the required field", {
@@ -440,7 +442,7 @@ export function SignaturePanel({
       const extraValues = collectExtraFieldValues(selectedField);
       const value =
         !isRequiredField(selectedField) &&
-        !hasRequiredValue(selectedField, draftValue)
+        !hasDraftValue(selectedField, draftValue)
           ? draftValue
           : await collectActiveFieldValue(selectedField);
       const nextValues = {
@@ -639,7 +641,7 @@ export function SignaturePanel({
 
     if (
       field.type === "phone" &&
-      !isPhoneFieldAccepted(form, field, fieldValue)
+      !isPhoneValueAccepted(acceptedPhoneValues[getFieldKey(field)], fieldValue)
     ) {
       throw new Error("Enter a valid phone number before continuing.");
     }
@@ -827,6 +829,25 @@ export function SignaturePanel({
                 previewFieldValue(value);
               }}
               onFormChange={onFormChange}
+              phoneAcceptance={{
+                acceptedValue: acceptedPhoneValues[activeFieldKey],
+                verifiedValue: verifiedPhoneValues[activeFieldKey],
+                onAccept: (phone) =>
+                  setAcceptedPhoneValues((previous) => ({
+                    ...previous,
+                    [activeFieldKey]: phone,
+                  })),
+                onVerify: (phone) => {
+                  setAcceptedPhoneValues((previous) => ({
+                    ...previous,
+                    [activeFieldKey]: phone,
+                  }));
+                  setVerifiedPhoneValues((previous) => ({
+                    ...previous,
+                    [activeFieldKey]: phone,
+                  }));
+                },
+              }}
               onFilesChange={(files) => {
                 setInvalidFieldKey(null);
                 setUploadedFiles(files);
@@ -1129,7 +1150,7 @@ function SignatureInput({
           onTouchEnd: onDrawChange,
         }}
         penColor="#16304f"
-        ref={padRef}
+        canvasRef={padRef}
         throttle={8}
       />
       <Button
@@ -1158,6 +1179,7 @@ function SignerFieldInput({
   onAttachmentValueUuidsChange,
   onChange,
   onFormChange,
+  phoneAcceptance,
   onFilesChange,
   onSelectedOptionsChange,
   selectedOptions,
@@ -1172,12 +1194,27 @@ function SignerFieldInput({
   onAttachmentValueUuidsChange: (value: string[]) => void;
   onChange: (value: string) => void;
   onFormChange: (form: SigningForm) => void;
+  phoneAcceptance: PhoneAcceptance;
   onFilesChange: (files: File[]) => void;
   onSelectedOptionsChange: (value: string[]) => void;
   selectedOptions: string[];
   uploadedFiles: File[];
   value: string;
 }) {
+  if (field.type === "phone") {
+    return (
+      <PhoneFieldInput
+        field={field}
+        form={form}
+        isInvalid={isInvalid}
+        value={value}
+        onFormChange={onFormChange}
+        onChange={onChange}
+        acceptance={phoneAcceptance}
+      />
+    );
+  }
+
   if (field.type === "checkbox") {
     const label =
       field.description || field.name || getDefaultFieldTitle(field);
@@ -1262,10 +1299,8 @@ function SignerFieldInput({
   return (
     <TextLikeFieldInput
       field={field}
-      form={form}
       isInvalid={isInvalid}
       value={value}
-      onFormChange={onFormChange}
       onChange={onChange}
     />
   );
@@ -1492,17 +1527,13 @@ function UploadedFileList({
 
 function TextLikeFieldInput({
   field,
-  form,
   isInvalid,
   onChange,
-  onFormChange,
   value,
 }: {
   field: SigningField;
-  form: SigningForm;
   isInvalid: boolean;
   onChange: (value: string) => void;
-  onFormChange: (form: SigningForm) => void;
   value: string;
 }) {
   const [isMultiline, setIsMultiline] = useState(false);
@@ -1529,19 +1560,6 @@ function TextLikeFieldInput({
           </FieldDescription>
         </Field>
       </FieldGroup>
-    );
-  }
-
-  if (field.type === "phone") {
-    return (
-      <PhoneFieldInput
-        field={field}
-        form={form}
-        isInvalid={isInvalid}
-        value={value}
-        onFormChange={onFormChange}
-        onChange={onChange}
-      />
     );
   }
 
@@ -1613,6 +1631,7 @@ function TextLikeFieldInput({
 }
 
 function PhoneFieldInput({
+  acceptance,
   field,
   form,
   isInvalid,
@@ -1620,6 +1639,7 @@ function PhoneFieldInput({
   onFormChange,
   value,
 }: {
+  acceptance: PhoneAcceptance;
   field: SigningField;
   form: SigningForm;
   isInvalid: boolean;
@@ -1651,7 +1671,7 @@ function PhoneFieldInput({
   const phoneValidation = getPhoneValidationState(value, selectedCountryCode);
   const nationalValue = getNationalPhoneValue(value, selectedCountry.dial);
   const examplePlaceholder = getPhonePlaceholder(selectedCountryCode);
-  const isPhoneAccepted = isPhoneFieldAccepted(form, field, value);
+  const isPhoneAccepted = isPhoneValueAccepted(acceptance.acceptedValue, value);
 
   function updatePhone(nextCountryDialCode: string, nextNationalValue: string) {
     const cleanedNationalValue = nextNationalValue.replace(/^\+/, "");
@@ -1688,6 +1708,8 @@ function PhoneFieldInput({
         phone: phoneValidation.e164,
       });
 
+      if (!result.valid) throw new Error("Phone number is invalid.");
+      acceptance.onAccept(result.phone);
       onChange(result.phone);
       onFormChange({
         ...form,
@@ -1739,6 +1761,12 @@ function PhoneFieldInput({
         field_uuid: field.uuid,
         phone: value,
       });
+      const verifiedPhone = verifiedForm.values[getFieldKey(field)];
+      acceptance.onVerify(
+        typeof verifiedPhone === "string"
+          ? verifiedPhone
+          : phoneValidation.e164,
+      );
       onFormChange(verifiedForm);
       toast.success("Phone verified");
     } catch (error) {
@@ -1799,7 +1827,10 @@ function PhoneFieldInput({
             <>
               <CheckIcon className="size-4" />
               Phone number is valid
-              {isPhoneFieldVerified(form, field, value) ? " and verified" : ""}.
+              {isSamePhoneValue(acceptance.verifiedValue, value)
+                ? " and verified"
+                : ""}
+              .
             </>
           ) : value && !phoneValidation.isValid ? (
             `Enter a valid ${selectedCountry.name} number, for example ${examplePlaceholder}.`
@@ -2202,18 +2233,14 @@ function hasRequiredFieldValue(
     return true;
   }
 
-  return hasRequiredValue(field, form.values[getFieldKey(field)]);
+  return hasDraftValue(field, form.values[getFieldKey(field)]);
 }
 
 function isRequiredField(field: SigningField): boolean {
   return field.required !== false && field.readonly !== true;
 }
 
-function hasRequiredValue(field: SigningField, value: unknown): boolean {
-  if (!isRequiredField(field)) {
-    return true;
-  }
-
+function hasDraftValue(field: SigningField, value: unknown): boolean {
   if (Array.isArray(value)) {
     return value.length > 0;
   }
@@ -2240,36 +2267,40 @@ function getIncompleteFieldsExceptCurrent(
   );
 }
 
-function isPhoneFieldVerified(
-  form: SigningForm,
-  field: SigningField,
+function isSamePhoneValue(
+  savedValue: string | undefined,
   value: string,
 ): boolean {
-  const verifiedValue = form.values[getFieldKey(field)];
-
-  return (
-    typeof verifiedValue === "string" &&
-    verifiedValue !== "" &&
-    normalizePhoneValue(verifiedValue) === normalizePhoneValue(value)
-  );
-}
-
-function isPhoneFieldAccepted(
-  form: SigningForm,
-  field: SigningField,
-  value: string,
-): boolean {
-  if (isPhoneFieldVerified(form, field, value)) {
-    return true;
-  }
-
-  const savedValue = form.values[getFieldKey(field)];
-
   return (
     typeof savedValue === "string" &&
     savedValue !== "" &&
-    normalizePhoneValue(savedValue) === normalizePhoneValue(value) &&
-    getPhoneValidationState(savedValue).isValid
+    normalizePhoneValue(savedValue) === normalizePhoneValue(value)
+  );
+}
+
+function isPhoneValueAccepted(
+  savedValue: string | undefined,
+  value: string,
+): boolean {
+  return (
+    isSamePhoneValue(savedValue, value) &&
+    getPhoneValidationState(value).isValid
+  );
+}
+
+function getSavedPhoneValues(
+  fields: SigningField[],
+  form: SigningForm,
+): Record<string, string> {
+  return Object.fromEntries(
+    fields.flatMap((field) => {
+      const value = form.values[getFieldKey(field)];
+      return field.type === "phone" &&
+        typeof value === "string" &&
+        getPhoneValidationState(value).isValid
+        ? [[getFieldKey(field), value]]
+        : [];
+    }),
   );
 }
 

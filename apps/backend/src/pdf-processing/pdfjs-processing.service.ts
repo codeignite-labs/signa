@@ -1,3 +1,8 @@
+import {
+  protectRendererNetwork,
+  rendererContextOptions,
+  rendererCsp,
+} from '../common/rendering/renderer-network';
 import { createCanvas } from '@napi-rs/canvas';
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PDFDocument } from 'pdf-lib';
@@ -249,21 +254,24 @@ export class PdfjsProcessingService implements OnModuleDestroy {
     const { height, width } = this.getXfaPageSize(xfa);
     const browser = await this.getBrowser();
     const context = await browser.newContext({
+      ...rendererContextOptions,
       deviceScaleFactor: scale,
       viewport: {
         height: Math.ceil(height),
         width: Math.ceil(width),
       },
     });
-    const page = await context.newPage();
-
     try {
+      const resources = await protectRendererNetwork(context);
+      const page = await context.newPage();
       await page.setContent(await this.buildXfaHtml(xfa, { height, width }), {
         waitUntil: 'load',
       });
 
+      resources.assertAllowed();
       const root = page.locator('#xfa-root');
       const png = await root.screenshot({ type: 'png' });
+      resources.assertAllowed();
 
       return {
         height,
@@ -286,6 +294,7 @@ export class PdfjsProcessingService implements OnModuleDestroy {
       '<html>',
       '<head>',
       '<meta charset="utf-8" />',
+      `<meta http-equiv="Content-Security-Policy" content="${rendererCsp}">`,
       '<style>',
       css,
       'html,body{margin:0;padding:0;background:white;}',

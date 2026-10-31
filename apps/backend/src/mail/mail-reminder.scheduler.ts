@@ -121,7 +121,7 @@ export class MailReminderScheduler {
     const sentReminderCount = await this.submissionEvents.count({
       where: {
         submitterId: submitter.id,
-        eventType: 'send_reminder_email',
+        eventType: In(['send_reminder_email', 'email_reminder_sent']),
       },
     });
     const nextKey = reminderKeys[sentReminderCount];

@@ -1,6 +1,9 @@
 "use client";
 
-import { SigningBrandStyle, signingNavigationUrl } from "@/components/branding/signing-brand-style";
+import {
+  SigningBrandStyle,
+  signingNavigationUrl,
+} from "@/components/branding/signing-brand-style";
 import { BrandLogo } from "@/components/branding/brand-logo";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -109,15 +112,27 @@ export function StartFormPage({ slug }: { slug: string }) {
   }
 
   async function resendCode() {
-    if (!submitter.email) {
+    if (!submitter.email || isSubmitting) {
       return;
     }
 
-    await sendStartFormEmailVerification(slug, {
-      ...submitter,
-      email: submitter.email,
-    });
-    toast.success("Verification code resent");
+    setIsSubmitting(true);
+    try {
+      await sendStartFormEmailVerification(slug, {
+        ...submitter,
+        email: submitter.email,
+      });
+      toast.success("Verification code resent");
+    } catch (resendError) {
+      toast.error("Verification failed", {
+        description:
+          resendError instanceof Error
+            ? resendError.message
+            : "The verification code could not be resent. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (isLoading) {
@@ -148,7 +163,9 @@ export function StartFormPage({ slug }: { slug: string }) {
             {requiredFields.includes("name") ? (
               <StartFormInput
                 autoComplete="name"
-                onChange={(name) => setSubmitter((value) => ({ ...value, name }))}
+                onChange={(name) =>
+                  setSubmitter((value) => ({ ...value, name }))
+                }
                 placeholder="Name"
                 value={submitter.name ?? ""}
               />
@@ -187,8 +204,8 @@ export function StartFormPage({ slug }: { slug: string }) {
         ) : (
           <form className="space-y-4" onSubmit={handleVerificationSubmit}>
             <p className="text-sm leading-6 text-[var(--auth-muted-foreground)]">
-              We sent a one-time verification code to your email address.
-              Please enter the code below to continue.
+              We sent a one-time verification code to your email address. Please
+              enter the code below to continue.
             </p>
             <Input
               className="h-12 rounded-full text-center text-lg font-semibold tracking-[0.3em]"
@@ -204,7 +221,8 @@ export function StartFormPage({ slug }: { slug: string }) {
               </span>
               <button
                 className="font-semibold underline"
-                onClick={resendCode}
+                disabled={isSubmitting}
+                onClick={() => void resendCode()}
                 type="button"
               >
                 Re-send code

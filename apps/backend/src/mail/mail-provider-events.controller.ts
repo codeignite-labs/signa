@@ -2,13 +2,17 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  ServiceUnavailableException,
   Get,
+  NotFoundException,
+  UseGuards,
   Headers,
   Param,
   Post,
   Query,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiOkResponse,
   ApiOperation,
@@ -18,8 +22,12 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
+import { MailgunWebhookService } from './mailgun-webhook.service';
+import { JwtGuard } from '../auth/guards/jwt/jwt.guard';
+import { AdminGuard } from '../auth/guards/admin/admin.guard';
+import { CurrentUser } from '../common/decorators/user.decorator';
+import { User } from '../users/entities/user.entity';
 import { EmailEvent } from './entities/email-event.entity';
 import { EmailMessage } from './entities/email-message.entity';
 
@@ -32,12 +40,13 @@ export class MailProviderEventsController {
     private readonly emailEvents: Repository<EmailEvent>,
     @InjectRepository(EmailMessage)
     private readonly emailMessages: Repository<EmailMessage>,
+    private readonly mailgun: MailgunWebhookService,
   ) {}
 
   @Post('provider')
   @ApiOperation({
     description:
-      'Receives normalized provider events such as delivered, opened, clicked, bounced, or failed. Supports optional callback secret and Mailgun signature verification.',
+      'Receives normalized provider events such as delivered, opened, clicked, bounced, or failed. Requires a configured callback secret or valid Mailgun authentication.',
     summary: 'Record email provider event',
   })
   @ApiQuery({
@@ -65,19 +74,28 @@ export class MailProviderEventsController {
     @Query('secret') querySecret?: string,
   ): Promise<{ status: 'ok' }> {
     this.assertCallbackSecret(headerSecret ?? querySecret);
-    this.assertMailgunSignature(body);
+    if (this.config.get<string>('MAILGUN_WEBHOOK_SIGNING_KEY')) {
+      await this.mailgun.recordOnce(body, (manager) =>
+        this.persistEvents(body, manager),
+      );
+    } else {
+      await this.persistEvents(body);
+    }
+    return { status: 'ok' };
+  }
 
-    const events = normalizeProviderEvents(body);
-
-    for (const event of events) {
+  private async persistEvents(
+    body: unknown,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const messages = manager?.getRepository(EmailMessage) ?? this.emailMessages;
+    const events = manager?.getRepository(EmailEvent) ?? this.emailEvents;
+    for (const event of normalizeProviderEvents(body)) {
       const message = event.messageId
-        ? await this.emailMessages.findOne({
-            where: { messageId: event.messageId },
-          })
+        ? await messages.findOne({ where: { messageId: event.messageId } })
         : null;
-
-      await this.emailEvents.save(
-        this.emailEvents.create({
+      await events.save(
+        events.create({
           accountId: message?.accountId ?? null,
           data: event.data,
           email: event.email,
@@ -90,11 +108,11 @@ export class MailProviderEventsController {
         }),
       );
     }
-
-    return { status: 'ok' };
   }
 
   @Get('messages')
+  @UseGuards(JwtGuard, AdminGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     description:
       'Lists recently queued/sent email messages, optionally scoped to one submission or submitter for debugging delivery.',
@@ -112,12 +130,14 @@ export class MailProviderEventsController {
   })
   @ApiOkResponse({ type: Object })
   async listMessages(
+    @CurrentUser() user: User,
     @Query('submission_id') submissionId?: string,
     @Query('submitter_id') submitterId?: string,
   ): Promise<{ data: EmailMessage[] }> {
     return {
       data: await this.emailMessages.find({
         where: {
+          accountId: user.accountId,
           ...(submissionId ? { submissionId } : {}),
           ...(submitterId ? { submitterId } : {}),
         },
@@ -128,6 +148,8 @@ export class MailProviderEventsController {
   }
 
   @Get('messages/:id/events')
+  @UseGuards(JwtGuard, AdminGuard)
+  @ApiBearerAuth()
   @ApiParam({ description: 'Email message id.', name: 'id' })
   @ApiOperation({
     description:
@@ -136,14 +158,22 @@ export class MailProviderEventsController {
   })
   @ApiOkResponse({ type: Object })
   async listMessageEvents(
+    @CurrentUser() user: User,
     @Param('id') id: string,
   ): Promise<{ data: EmailEvent[] }> {
-    const message = await this.emailMessages.findOneBy({ id });
+    const message = await this.emailMessages.findOneBy({
+      id,
+      accountId: user.accountId,
+    });
+    if (!message) {
+      throw new NotFoundException({ error: 'Email message not found' });
+    }
 
     return {
       data: await this.emailEvents.find({
         where: {
-          emailMessageId: message?.id ?? id,
+          accountId: user.accountId,
+          emailMessageId: message.id,
         },
         order: { id: 'DESC' },
         take: 100,
@@ -155,35 +185,16 @@ export class MailProviderEventsController {
     const configuredSecret = this.config.get<string>('MAIL_CALLBACK_SECRET');
 
     if (!configuredSecret) {
+      if (!this.config.get<string>('MAILGUN_WEBHOOK_SIGNING_KEY')) {
+        throw new ServiceUnavailableException({
+          error: 'Email callback authentication is not configured',
+        });
+      }
       return;
     }
 
     if (providedSecret !== configuredSecret) {
       throw new ForbiddenException({ error: 'Invalid callback secret' });
-    }
-  }
-
-  private assertMailgunSignature(body: unknown): void {
-    const signingKey = this.config.get<string>('MAILGUN_WEBHOOK_SIGNING_KEY');
-
-    if (!signingKey || !isRecord(body) || !isRecord(body.signature)) {
-      return;
-    }
-
-    const timestamp = stringValue(body.signature.timestamp);
-    const token = stringValue(body.signature.token);
-    const signature = stringValue(body.signature.signature);
-
-    if (!timestamp || !token || !signature) {
-      throw new ForbiddenException({ error: 'Invalid Mailgun signature' });
-    }
-
-    const expected = createHmac('sha256', signingKey)
-      .update(`${timestamp}${token}`)
-      .digest('hex');
-
-    if (!constantTimeEqual(signature, expected)) {
-      throw new ForbiddenException({ error: 'Invalid Mailgun signature' });
     }
   }
 }
@@ -201,24 +212,34 @@ function normalizeProviderEvents(
 ): NormalizedEmailProviderEvent[] {
   const records = Array.isArray(body) ? body : [body];
 
-  return records.filter(isRecord).map((record) => ({
-    data: record,
+  return records.filter(isRecord).map(normalizeProviderEvent);
+}
+
+function normalizeProviderEvent(
+  record: Record<string, unknown>,
+): NormalizedEmailProviderEvent {
+  const event = isRecord(record['event-data']) ? record['event-data'] : record;
+  const message = isRecord(event.message) ? event.message : null;
+  const headers = message && isRecord(message.headers) ? message.headers : null;
+  return {
+    data: event,
     email:
-      stringValue(record.email) ??
-      stringValue(record.recipient) ??
-      stringValue(record.to) ??
+      stringValue(event.email) ??
+      stringValue(event.recipient) ??
+      stringValue(event.to) ??
       'unknown@example.invalid',
-    eventDatetime: dateValue(record.timestamp) ?? new Date(),
+    eventDatetime: dateValue(event.timestamp) ?? new Date(),
     eventType:
-      stringValue(record.event) ??
-      stringValue(record.event_type) ??
-      stringValue(record.type) ??
+      stringValue(event.event) ??
+      stringValue(event.event_type) ??
+      stringValue(event.type) ??
       'provider_event',
     messageId:
-      stringValue(record.message_id) ??
-      stringValue(record.messageId) ??
-      stringValue(record['MessageID']),
-  }));
+      stringValue(event.message_id) ??
+      stringValue(event.messageId) ??
+      stringValue(event['MessageID']) ??
+      stringValue(headers?.['message-id']),
+  };
 }
 
 function stringValue(value: unknown): string | null {
@@ -241,14 +262,4 @@ function dateValue(value: unknown): Date | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function constantTimeEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  );
 }

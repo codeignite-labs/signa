@@ -7,6 +7,7 @@ import { UpdateSubmitterDto } from '../submitters/dto/update-submitter.dto';
 import { TemplateField } from '../templates/types/template-json';
 import {
   buildAttachmentFromRawValue,
+  buildPendingAttachment,
   PendingSubmitterAttachment,
 } from './submitter-attachment-ingestion';
 
@@ -208,14 +209,20 @@ export class SubmitterValueNormalizer {
     value: unknown;
     field: TemplateField;
   }): Promise<PendingSubmitterAttachment> {
-    return buildAttachmentFromRawValue({
-      value: stringValue(options.value),
-      type: String(options.field.type),
-      maxDownloadBytes: this.config.get<number>(
-        'ATTACHMENT_INGEST_MAX_BYTES',
-        10 * 1024 * 1024,
-      ),
-    });
+    const value = stringValue(options.value);
+    const type = String(options.field.type);
+    const maxDownloadBytes = this.config.get<number>(
+      'ATTACHMENT_INGEST_MAX_BYTES',
+      10 * 1024 * 1024,
+    );
+    if (/^https?:\/\//i.test(value)) {
+      const stored = await this.storageService.readSignedBlobUrl(
+        value,
+        maxDownloadBytes,
+      );
+      if (stored) return buildPendingAttachment({ ...stored, type });
+    }
+    return buildAttachmentFromRawValue({ value, type, maxDownloadBytes });
   }
 
   private collectDefaultValues(
